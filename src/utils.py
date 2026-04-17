@@ -134,26 +134,53 @@ def fetch_songs() -> None:
         error(f"Error occurred while fetching songs: {str(e)}")
 
 
-def choose_random_song() -> str:
+def generate_silent_audio(duration: float) -> str:
     """
-    Chooses a random song from the songs/ directory.
+    Generates a silent WAV file of the given duration as fallback when no songs are available.
+
+    Args:
+        duration (float): Duration in seconds.
 
     Returns:
-        str: The path to the chosen song.
+        path (str): Path to the generated silent WAV file.
     """
-    try:
-        songs_dir = os.path.join(ROOT_DIR, "Songs")
+    import struct
+    import wave
+
+    path = os.path.join(ROOT_DIR, ".mp", "silence.wav")
+    sample_rate = 44100
+    n_samples = int(sample_rate * duration)
+    with wave.open(path, "w") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        wf.writeframes(struct.pack("<" + "h" * n_samples, *([0] * n_samples)))
+    return path
+
+
+def choose_random_song(fallback_duration: float = 60.0) -> str:
+    """
+    Chooses a random song from the Songs/ directory.
+    Falls back to a silent audio file if no songs are available.
+
+    Args:
+        fallback_duration (float): Duration of silent fallback in seconds.
+
+    Returns:
+        str: The path to the chosen song (or silent fallback).
+    """
+    songs_dir = os.path.join(ROOT_DIR, "Songs")
+    if os.path.isdir(songs_dir):
         songs = [
             name
             for name in os.listdir(songs_dir)
             if os.path.isfile(os.path.join(songs_dir, name))
             and name.lower().endswith((".mp3", ".wav", ".m4a", ".aac", ".ogg"))
         ]
-        if len(songs) == 0:
-            raise RuntimeError("No audio files found in Songs directory")
-        song = random.choice(songs)
-        success(f" => Chose song: {song}")
-        return os.path.join(ROOT_DIR, "Songs", song)
-    except Exception as e:
-        error(f"Error occurred while choosing random song: {str(e)}")
-        raise
+        if songs:
+            song = random.choice(songs)
+            success(f" => Chose song: {song}")
+            return os.path.join(ROOT_DIR, "Songs", song)
+
+    warning(" => No songs found in Songs/ — using silent background audio.")
+    return generate_silent_audio(fallback_duration)

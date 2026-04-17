@@ -340,6 +340,19 @@ def get_script_sentence_length() -> int:
         else:
             return 4
 
+def get_fal_api_key() -> str:
+    with open(os.path.join(ROOT_DIR, "config.json"), "r") as file:
+        configured = json.load(file).get("fal_api_key", "")
+        return configured or os.environ.get("FAL_KEY", "")
+
+def get_fal_model() -> str:
+    with open(os.path.join(ROOT_DIR, "config.json"), "r") as file:
+        return json.load(file).get("fal_model", "fal-ai/flux/schnell")
+
+def get_image_provider() -> str:
+    with open(os.path.join(ROOT_DIR, "config.json"), "r") as file:
+        return json.load(file).get("image_provider", "fal")
+
 def get_post_bridge_config() -> dict:
     """
     Gets the Post Bridge configuration with safe defaults.

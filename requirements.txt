@@ -1,4 +1,5 @@
 wheel
+fal-client
 termcolor
 schedule
 requests

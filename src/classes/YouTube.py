@@ -377,9 +377,53 @@ class YouTube:
                 warning(f"Failed to generate image with Nano Banana 2 API: {str(e)}")
             return None
 
+    def generate_image_fal(self, prompt: str) -> str:
+        """
+        Generates an AI Image using FAL.AI (FLUX or other models).
+
+        Args:
+            prompt (str): Prompt for image generation
+
+        Returns:
+            path (str): The path to the generated image.
+        """
+        import fal_client
+
+        api_key = get_fal_api_key()
+        if not api_key:
+            error("fal_api_key is not configured.")
+            return None
+
+        os.environ["FAL_KEY"] = api_key
+        model = get_fal_model()
+
+        if get_verbose():
+            info(f" => Generating image with FAL.AI ({model}): {prompt}")
+
+        try:
+            result = fal_client.run(
+                model,
+                arguments={
+                    "prompt": prompt,
+                    "image_size": "portrait_16_9",
+                    "num_inference_steps": 4,
+                    "num_images": 1,
+                    "enable_safety_checker": False,
+                },
+            )
+            image_url = result["images"][0]["url"]
+            response = requests.get(image_url, timeout=60)
+            response.raise_for_status()
+            return self._persist_image(response.content, f"FAL.AI ({model})")
+        except Exception as e:
+            if get_verbose():
+                warning(f"Failed to generate image with FAL.AI: {str(e)}")
+            return None
+
     def generate_image(self, prompt: str) -> str:
         """
-        Generates an AI Image based on the given prompt using Nano Banana 2.
+        Generates an AI Image based on the given prompt.
+        Provider selected via config: image_provider = "fal" | "nanobanana2"
 
         Args:
             prompt (str): Reference for image generation
@@ -387,7 +431,10 @@ class YouTube:
         Returns:
             path (str): The path to the generated image.
         """
-        return self.generate_image_nanobanana2(prompt)
+        provider = get_image_provider().lower()
+        if provider == "nanobanana2":
+            return self.generate_image_nanobanana2(prompt)
+        return self.generate_image_fal(prompt)
 
     def generate_script_to_speech(self, tts_instance: TTS) -> str:
         """

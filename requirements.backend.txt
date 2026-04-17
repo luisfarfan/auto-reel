@@ -2,6 +2,7 @@ fastapi>=0.111
 uvicorn[standard]>=0.29
 sqlalchemy[asyncio]>=2.0
 asyncpg
+psycopg2-binary
 alembic
 celery[redis]>=5.3
 redis>=5.0

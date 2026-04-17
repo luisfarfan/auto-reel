@@ -1,23 +1,21 @@
 from decimal import Decimal
+
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_db
 from backend.models.cost import CostRecord, BudgetConfig
+from backend.schemas.cost import (
+    BudgetUpdateRequest, CostSummaryResponse, BudgetResponse,
+    CostByServiceRow, CostByJobRow,
+)
 from backend.services.cost_tracker import get_daily_total, get_monthly_total
 
 router = APIRouter(prefix="/costs", tags=["costs"])
 
 
-class BudgetUpdateRequest(BaseModel):
-    daily_limit_usd: float | None = None
-    monthly_limit_usd: float | None = None
-    alert_threshold: float | None = None
-
-
-@router.get("")
+@router.get("", response_model=CostSummaryResponse)
 async def get_cost_summary(db: AsyncSession = Depends(get_db)):
     daily = await get_daily_total(db)
     monthly = await get_monthly_total(db)
@@ -26,7 +24,7 @@ async def get_cost_summary(db: AsyncSession = Depends(get_db)):
     return {"daily_usd": daily, "monthly_usd": monthly, "total_usd": total}
 
 
-@router.get("/by-service")
+@router.get("/by-service", response_model=list[CostByServiceRow])
 async def costs_by_service(db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(CostRecord.service, func.sum(CostRecord.cost_usd).label("total"))
@@ -36,7 +34,7 @@ async def costs_by_service(db: AsyncSession = Depends(get_db)):
     return [{"service": r.service, "total_usd": float(r.total)} for r in result.all()]
 
 
-@router.get("/by-job")
+@router.get("/by-job", response_model=list[CostByJobRow])
 async def costs_by_job(limit: int = 20, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(CostRecord.job_id, func.sum(CostRecord.cost_usd).label("total"))
@@ -48,7 +46,7 @@ async def costs_by_job(limit: int = 20, db: AsyncSession = Depends(get_db)):
     return [{"job_id": str(r.job_id), "total_usd": float(r.total)} for r in result.all()]
 
 
-@router.get("/budget")
+@router.get("/budget", response_model=BudgetResponse)
 async def get_budget(db: AsyncSession = Depends(get_db)):
     budget = await db.get(BudgetConfig, 1)
     if not budget:
@@ -60,7 +58,7 @@ async def get_budget(db: AsyncSession = Depends(get_db)):
     }
 
 
-@router.put("/budget")
+@router.put("/budget", response_model=BudgetResponse)
 async def update_budget(req: BudgetUpdateRequest, db: AsyncSession = Depends(get_db)):
     budget = await db.get(BudgetConfig, 1)
     if not budget:
@@ -73,4 +71,9 @@ async def update_budget(req: BudgetUpdateRequest, db: AsyncSession = Depends(get
     if req.alert_threshold is not None:
         budget.alert_threshold = req.alert_threshold
     await db.commit()
-    return {"updated": True}
+    await db.refresh(budget)
+    return {
+        "daily_limit_usd": float(budget.daily_limit_usd),
+        "monthly_limit_usd": float(budget.monthly_limit_usd),
+        "alert_threshold": budget.alert_threshold,
+    }

@@ -1,4 +1,6 @@
 import os
+import uuid as _uuid
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy import select
@@ -10,6 +12,13 @@ from backend.models.video import Video
 router = APIRouter(prefix="/videos", tags=["videos"])
 
 
+def _parse_uuid(value: str) -> _uuid.UUID:
+    try:
+        return _uuid.UUID(value)
+    except ValueError:
+        raise HTTPException(404, "Not found")
+
+
 @router.get("")
 async def list_videos(limit: int = 20, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Video).order_by(Video.created_at.desc()).limit(limit))
@@ -18,7 +27,7 @@ async def list_videos(limit: int = 20, db: AsyncSession = Depends(get_db)):
 
 @router.get("/{video_id}")
 async def get_video(video_id: str, db: AsyncSession = Depends(get_db)):
-    video = await db.get(Video, video_id)
+    video = await db.get(Video, _parse_uuid(video_id))
     if not video:
         raise HTTPException(404, "Video not found")
     return _to_dict(video)
@@ -26,7 +35,7 @@ async def get_video(video_id: str, db: AsyncSession = Depends(get_db)):
 
 @router.get("/{video_id}/stream")
 async def stream_video(video_id: str, db: AsyncSession = Depends(get_db)):
-    video = await db.get(Video, video_id)
+    video = await db.get(Video, _parse_uuid(video_id))
     if not video or not video.file_path:
         raise HTTPException(404, "Video file not found")
     if not os.path.exists(video.file_path):

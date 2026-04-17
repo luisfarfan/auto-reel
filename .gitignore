@@ -8,3 +8,7 @@ niche.txt
 *.exe
 auto.sh
 .DS_Store
+.env
+google-maps-scraper
+google-maps-scraper-v2
+webdata/

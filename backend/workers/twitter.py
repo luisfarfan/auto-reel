@@ -58,6 +58,7 @@ def post_tweet(self, job_id: str, account_id: str, topic: str, model: str = "lla
 
             post = Post(job_id=job_id, account_id=account_id, platform="twitter", content=content)
             db.add(post)
+            db.flush()
             job.status = "done"
             job.finished_at = datetime.now(timezone.utc)
             job.result = {"content": content, "post_id": str(post.id)}

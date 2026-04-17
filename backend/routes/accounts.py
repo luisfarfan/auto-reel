@@ -2,6 +2,7 @@ import uuid as _uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_db
@@ -41,6 +42,10 @@ async def delete_account(account_id: str, db: AsyncSession = Depends(get_db)):
     account = await db.get(Account, _parse_uuid(account_id))
     if not account:
         raise HTTPException(404, "Account not found")
-    await db.delete(account)
-    await db.commit()
+    try:
+        await db.delete(account)
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(409, "Account has associated jobs and cannot be deleted")
     return {"deleted": account_id}

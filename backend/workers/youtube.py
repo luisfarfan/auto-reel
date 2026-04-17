@@ -106,9 +106,11 @@ def generate_video(self: Task, job_id: str, account_id: str, niche: str, languag
         job.celery_task_id = self.request.id
         db.commit()
 
-        for i, step in enumerate(STEPS):
-            db.add(PipelineStep(job_id=job_id, step=step, status="pending"))
-        db.commit()
+        existing = db.query(PipelineStep).filter_by(job_id=job_id).count()
+        if existing == 0:
+            for step in STEPS:
+                db.add(PipelineStep(job_id=job_id, step=step, status="pending"))
+            db.commit()
 
         r.publish(f"job:{job_id}", json.dumps({
             "event": "job_started", "job_id": job_id,
@@ -124,7 +126,7 @@ def generate_video(self: Task, job_id: str, account_id: str, niche: str, languag
             from utils import choose_random_song
             from config import get_fal_api_key, get_fal_model, ROOT_DIR, equalize_subtitles
 
-            select_model(json.loads(job.input or "{}").get("model", "llama3.1:latest"))
+            select_model((job.input or {}).get("model", "llama3.1:latest"))
             total_cost = 0.0
             os.makedirs(os.path.join(ROOT_DIR, ".mp"), exist_ok=True)
 

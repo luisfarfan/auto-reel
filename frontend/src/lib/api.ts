@@ -46,6 +46,18 @@ export interface BudgetConfig {
   alert_threshold: number
 }
 
+export interface CostByService {
+  service: string
+  total_usd: number
+  count: number
+}
+
+export interface CostByJob {
+  job_id: string
+  total_usd: number
+  created_at: string
+}
+
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`)
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
@@ -58,6 +70,35 @@ async function post<T>(path: string, body: unknown): Promise<T> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   })
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText)
+    throw new Error(text || `${res.status}`)
+  }
+  return res.json() as Promise<T>
+}
+
+async function patch<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+  return res.json() as Promise<T>
+}
+
+async function put<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+  return res.json() as Promise<T>
+}
+
+async function del<T>(path: string): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, { method: "DELETE" })
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
   return res.json() as Promise<T>
 }
@@ -65,7 +106,9 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 export const api = {
   jobs: {
     list: (params?: { status?: string; type?: string }) => {
-      const q = new URLSearchParams(params as Record<string, string>).toString()
+      const q = new URLSearchParams(
+        Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v != null)) as Record<string, string>
+      ).toString()
       return get<Job[]>(`/jobs${q ? `?${q}` : ""}`)
     },
     get: (id: string) => get<Job>(`/jobs/${id}`),
@@ -74,13 +117,23 @@ export const api = {
       post<{ job_id: string; status: string }>("/jobs/youtube/generate", body),
     createTwitter: (body: { account_id: string; topic: string }) =>
       post<{ job_id: string; status: string }>("/jobs/twitter/post", body),
+    cancel: (id: string) => del<{ status: string }>(`/jobs/${id}`),
   },
   accounts: {
-    list: () => get<Account[]>("/accounts"),
+    list: (platform?: "youtube" | "twitter") =>
+      get<Account[]>(`/accounts${platform ? `?platform=${platform}` : ""}`),
     create: (body: Partial<Account>) => post<Account>("/accounts", body),
+    delete: (id: string) => del<{ deleted: string }>(`/accounts/${id}`),
   },
   costs: {
     summary: () => get<CostSummary>("/costs"),
     budget: () => get<BudgetConfig>("/costs/budget"),
+    updateBudget: (body: BudgetConfig) => put<BudgetConfig>("/costs/budget", body),
+    byService: () => get<CostByService[]>("/costs/by-service"),
+    byJob: () => get<CostByJob[]>("/costs/by-job"),
+  },
+  config: {
+    get: () => get<Record<string, unknown>>("/config"),
+    patch: (body: Record<string, unknown>) => patch<Record<string, unknown>>("/config", body),
   },
 }

@@ -37,6 +37,7 @@ def post_tweet(self, job_id: str, account_id: str, topic: str, model: str = "lla
             return {"error": "Job not found"}
 
         job.status = "running"
+        job.error = None
         job.started_at = datetime.now(timezone.utc)
         job.celery_task_id = self.request.id
         db.commit()

@@ -52,7 +52,8 @@ def post_tweet(self, job_id: str, account_id: str, topic: str, model: str = "lla
             publish("generate_post", "running", "Generating tweet...", 20)
             content = generate_text(
                 f"Write a tweet (max 260 chars) about: {topic}. "
-                "No hashtag spam. Return ONLY the tweet text."
+                "No hashtag spam. Return ONLY the tweet text.",
+                max_tokens=80,
             )
             content = re.sub(r"\*", "", content).strip()[:260]
             publish("generate_post", "done", content, 80)

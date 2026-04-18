@@ -38,17 +38,7 @@ def get_active_model() -> str | None:
     return _selected_model
 
 
-def generate_text(prompt: str, model_name: str = None) -> str:
-    """
-    Generates text using the local Ollama server.
-
-    Args:
-        prompt (str): User prompt
-        model_name (str): Optional model name override
-
-    Returns:
-        response (str): Generated text
-    """
+def generate_text(prompt: str, model_name: str = None, max_tokens: int = 512) -> str:
     model = model_name or _selected_model
     if not model:
         raise RuntimeError(
@@ -58,6 +48,7 @@ def generate_text(prompt: str, model_name: str = None) -> str:
     response = _client().chat(
         model=model,
         messages=[{"role": "user", "content": prompt}],
+        options={"num_predict": max_tokens},
     )
 
     return response["message"]["content"].strip()

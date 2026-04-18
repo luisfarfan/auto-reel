@@ -137,7 +137,8 @@ def generate_video(self: Task, job_id: str, account_id: str, niche: str, languag
 
             topic = generate_text(
                 f"Give me one YouTube Shorts video idea about: {niche}. "
-                "Return ONLY the idea, no intro text, no quotes."
+                "Return ONLY the idea, no intro text, no quotes.",
+                max_tokens=60,
             )
             topic = topic.strip().strip('"')
             cost = record_cost(db, "ollama", "generate_text", 0.0, "ollama", {"topic": topic})
@@ -152,7 +153,8 @@ def generate_video(self: Task, job_id: str, account_id: str, niche: str, languag
             script = generate_text(
                 f"Write a 4-sentence YouTube Shorts script about: {topic}. "
                 f"Language: {language}. "
-                "Return ONLY the script, no labels, no markdown, no intro text."
+                "Return ONLY the script, no labels, no markdown, no intro text.",
+                max_tokens=300,
             )
             script = re.sub(r"\*", "", script).strip()
             update_step(db, "generate_script", "done", script[:100] + "...", {"script": script})
@@ -164,11 +166,13 @@ def generate_video(self: Task, job_id: str, account_id: str, niche: str, languag
 
             title = generate_text(
                 f"Generate a YouTube Short title with hashtags for: {topic}. "
-                "Max 100 chars. Return ONLY the title."
+                "Max 100 chars. Return ONLY the title.",
+                max_tokens=60,
             )[:100]
             description = generate_text(
                 f"Generate a YouTube description for this script: {script[:300]}. "
-                "Return ONLY the description."
+                "Return ONLY the description. Max 3 sentences.",
+                max_tokens=150,
             )
             metadata = {"title": title, "description": description}
             update_step(db, "generate_metadata", "done", title, metadata)
@@ -180,7 +184,8 @@ def generate_video(self: Task, job_id: str, account_id: str, niche: str, languag
 
             raw = generate_text(
                 f'Generate 3 image prompts for AI image generation about: {topic}. '
-                'Return ONLY a JSON array: ["prompt1","prompt2","prompt3"]'
+                'Return ONLY a JSON array: ["prompt1","prompt2","prompt3"]',
+                max_tokens=120,
             ).replace("```json", "").replace("```", "").strip()
             try:
                 image_prompts = json.loads(raw)[:3]

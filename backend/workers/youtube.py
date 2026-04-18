@@ -330,6 +330,7 @@ def generate_video(self: Task, job_id: str, account_id: str, niche: str, languag
                 file_size_bytes=size_bytes,
             )
             db.add(video)
+            db.flush()
 
             job.status = "done"
             job.finished_at = datetime.now(timezone.utc)

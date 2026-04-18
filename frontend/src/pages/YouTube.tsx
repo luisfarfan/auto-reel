@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { api, type Account, type Job, type PipelineStep } from "@/lib/api"
 import { useJobStream } from "@/hooks/useJobStream"
 import { PipelineView } from "@/components/PipelineView"
@@ -6,6 +6,38 @@ import { cn } from "@/lib/utils"
 import { Video, Plus, Loader2, ChevronDown, ChevronUp, Trash2 } from "lucide-react"
 
 const LANGUAGES = ["English", "Spanish", "Portuguese", "French", "German", "Italian", "Japanese"]
+
+function VideoPlayer({ job }: { job: Job }) {
+  const [videoId, setVideoId] = useState<string | null>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+
+  useEffect(() => {
+    const rid = job.result?.video_id as string | undefined
+    if (rid && rid !== "None") {
+      setVideoId(rid)
+      return
+    }
+    // fallback: look up video by job_id
+    api.videos.byJob(job.id).then((v) => { if (v) setVideoId(v.id) }).catch(() => {})
+  }, [job.id, job.result])
+
+  if (!videoId) return null
+
+  return (
+    <div className="px-4 pb-4 flex flex-col items-center gap-2">
+      <video
+        ref={videoRef}
+        src={`/api/videos/${videoId}/stream`}
+        controls
+        className="rounded-lg w-full"
+        style={{ maxWidth: "220px", aspectRatio: "9/16" }}
+      />
+      <p className="text-xs text-muted-foreground font-mono truncate max-w-xs">
+        {job.result?.video_path as string}
+      </p>
+    </div>
+  )
+}
 
 function JobRow({ job, onRefresh }: { job: Job; onRefresh: () => void }) {
   const [steps, setSteps] = useState<PipelineStep[]>([])
@@ -76,13 +108,7 @@ function JobRow({ job, onRefresh }: { job: Job; onRefresh: () => void }) {
         </div>
       )}
 
-      {job.status === "done" && !!job.result?.video_path && (
-        <div className="px-4 pb-3">
-          <p className="text-xs text-green-400 font-mono truncate">
-            {job.result.video_path as string}
-          </p>
-        </div>
-      )}
+      {job.status === "done" && <VideoPlayer job={job} />}
 
       {expanded && (
         <div className="px-4 pb-4 border-t border-border pt-3">

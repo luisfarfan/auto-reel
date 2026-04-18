@@ -46,6 +46,16 @@ export interface BudgetConfig {
   alert_threshold: number
 }
 
+export interface VideoRecord {
+  id: string
+  job_id: string | null
+  title: string | null
+  file_path: string | null
+  duration_seconds: number | null
+  file_size_bytes: number | null
+  created_at: string
+}
+
 export interface CostByService {
   service: string
   total_usd: number
@@ -118,6 +128,11 @@ export const api = {
     createTwitter: (body: { account_id: string; topic: string }) =>
       post<{ job_id: string; status: string }>("/jobs/twitter/post", body),
     cancel: (id: string) => del<{ status: string }>(`/jobs/${id}`),
+  },
+  videos: {
+    list: () => get<VideoRecord[]>("/videos"),
+    byJob: (jobId: string) =>
+      get<VideoRecord[]>("/videos").then((vs) => vs.find((v) => v.job_id === jobId) ?? null),
   },
   accounts: {
     list: (platform?: "youtube" | "twitter") =>

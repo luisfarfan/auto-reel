@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     mp_dir: str = ".mp"
     config_path: str = "config.json"
+    tavily_api_key: str = ""
+    remotion_service_url: str = "http://localhost:3001"
 
     class Config:
         env_file = ".env"

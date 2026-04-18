@@ -25,6 +25,21 @@ async def list_videos(limit: int = 20, db: AsyncSession = Depends(get_db)):
     return [_to_dict(v) for v in result.scalars().all()]
 
 
+@router.get("/by-job/{job_id}")
+async def get_video_by_job(job_id: str, db: AsyncSession = Depends(get_db)):
+    try:
+        jid = _uuid.UUID(job_id)
+    except ValueError:
+        raise HTTPException(404, "Not found")
+    result = await db.execute(
+        select(Video).where(Video.job_id == jid).order_by(Video.created_at.desc()).limit(1)
+    )
+    video = result.scalar_one_or_none()
+    if not video:
+        raise HTTPException(404, "No video for this job")
+    return _to_dict(video)
+
+
 @router.get("/{video_id}")
 async def get_video(video_id: str, db: AsyncSession = Depends(get_db)):
     video = await db.get(Video, _parse_uuid(video_id))

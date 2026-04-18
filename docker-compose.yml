@@ -67,5 +67,22 @@ services:
       redis:
         condition: service_healthy
 
+  remotion-service:
+    build:
+      context: ./remotion-service
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+      OUTPUT_DIR: /app/.mp
+    volumes:
+      - .mp:/app/.mp
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3001/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres_data:

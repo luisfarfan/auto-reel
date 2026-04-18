@@ -10,6 +10,18 @@ class GenerateVideoRequest(BaseModel):
     model: str = "llama3.1:latest"
 
 
+class GenerateTechVideoRequest(BaseModel):
+    account_id: uuid.UUID
+    topic: str
+    language: str = "English"
+    template: str = "tech-dark"
+    resolution: str = "shorts"
+    web_search_enabled: bool = True
+    model: str = "qwen2.5-coder:7b"
+    music_track: str | None = None
+    duration_hint: str = "60s"   # 30s | 60s | 90s | 120s
+
+
 class PostTweetRequest(BaseModel):
     account_id: uuid.UUID
     topic: str

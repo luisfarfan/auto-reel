@@ -8,6 +8,7 @@ celery_app = Celery(
     include=[
         "backend.workers.youtube",
         "backend.workers.twitter",
+        "backend.workers.remotion_generate",
     ],
 )
 
@@ -20,4 +21,9 @@ celery_app.conf.update(
     task_track_started=True,
     worker_prefetch_multiplier=1,
     task_acks_late=True,
+    task_routes={
+        "remotion.generate_video": {"queue": "remotion"},
+        "youtube.generate_video":  {"queue": "youtube"},
+        "twitter.post_tweet":      {"queue": "twitter"},
+    },
 )

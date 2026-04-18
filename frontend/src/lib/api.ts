@@ -127,12 +127,23 @@ export const api = {
       post<{ job_id: string; status: string }>("/jobs/youtube/generate", body),
     createTwitter: (body: { account_id: string; topic: string }) =>
       post<{ job_id: string; status: string }>("/jobs/twitter/post", body),
+    createRemotion: (body: {
+      account_id: string
+      topic: string
+      language?: string
+      template?: string
+      resolution?: string
+      web_search_enabled?: boolean
+      model?: string
+      music_track?: string | null
+      duration_hint?: string
+    }) => post<{ job_id: string; status: string }>("/jobs/remotion/generate", body),
     cancel: (id: string) => del<{ status: string }>(`/jobs/${id}`),
   },
   videos: {
     list: () => get<VideoRecord[]>("/videos"),
-    byJob: (jobId: string) =>
-      get<VideoRecord[]>("/videos").then((vs) => vs.find((v) => v.job_id === jobId) ?? null),
+    byJob: (jobId: string) => get<VideoRecord>(`/videos/by-job/${jobId}`),
+    getById: (videoId: string) => get<VideoRecord>(`/videos/${videoId}`),
   },
   accounts: {
     list: (platform?: "youtube" | "twitter") =>

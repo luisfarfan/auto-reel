@@ -367,7 +367,8 @@ def generate_video(self: Task, job_id: str, account_id: str, niche: str, languag
 
             r.publish(f"job:{job_id}", json.dumps({
                 "event": "job_done", "job_id": job_id,
-                "video_path": out_path, "total_cost_usd": total_cost,
+                "video_path": out_path, "video_id": str(video.id),
+                "total_cost_usd": total_cost,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }))
 

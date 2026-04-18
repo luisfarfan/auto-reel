@@ -7,11 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.database import get_db
 from backend.models.job import Job, PipelineStep
 from backend.schemas.job import (
-    GenerateVideoRequest, PostTweetRequest,
+    GenerateVideoRequest, PostTweetRequest, GenerateTechVideoRequest,
     JobResponse, PipelineStepResponse,
 )
 from backend.workers.youtube import generate_video
 from backend.workers.twitter import post_tweet
+from backend.workers.remotion_generate import generate_tech_video
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -43,6 +44,35 @@ async def create_twitter_job(req: PostTweetRequest, db: AsyncSession = Depends(g
     await db.commit()
     await db.refresh(job)
     task = post_tweet.delay(str(job.id), str(req.account_id), req.topic, req.model)
+    job.celery_task_id = task.id
+    await db.commit()
+    return {"job_id": str(job.id), "status": "pending"}
+
+
+@router.post("/remotion/generate", status_code=202)
+async def create_remotion_job(req: GenerateTechVideoRequest, db: AsyncSession = Depends(get_db)):
+    job = Job(
+        type="remotion_generate",
+        account_id=req.account_id,
+        input={
+            "topic": req.topic,
+            "language": req.language,
+            "template": req.template,
+            "resolution": req.resolution,
+            "web_search_enabled": req.web_search_enabled,
+            "model": req.model,
+            "music_track": req.music_track,
+            "duration_hint": req.duration_hint,
+        },
+    )
+    db.add(job)
+    await db.commit()
+    await db.refresh(job)
+    task = generate_tech_video.delay(
+        str(job.id), str(req.account_id),
+        req.topic, req.language, req.template, req.resolution,
+        req.web_search_enabled, req.model, req.music_track, req.duration_hint,
+    )
     job.celery_task_id = task.id
     await db.commit()
     return {"job_id": str(job.id), "status": "pending"}

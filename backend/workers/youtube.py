@@ -18,6 +18,26 @@ from celery import Task
 from backend.workers.celery_app import celery_app
 from backend.settings import settings
 
+VOICE_MAP = {
+    "English":    "en-US-JennyNeural",
+    "Spanish":    "es-MX-DaliaNeural",
+    "Portuguese": "pt-BR-FranciscaNeural",
+    "French":     "fr-FR-DeniseNeural",
+    "German":     "de-DE-KatjaNeural",
+    "Italian":    "it-IT-ElsaNeural",
+    "Japanese":   "ja-JP-NanamiNeural",
+}
+
+WHISPER_LANG_MAP = {
+    "English":    "en",
+    "Spanish":    "es",
+    "Portuguese": "pt",
+    "French":     "fr",
+    "German":     "de",
+    "Italian":    "it",
+    "Japanese":   "ja",
+}
+
 STEPS = [
     "generate_topic",
     "generate_script",
@@ -123,7 +143,6 @@ def generate_video(self: Task, job_id: str, account_id: str, niche: str, languag
             import sys
             sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../src"))
             from llm_provider import select_model, generate_text
-            from classes.Tts import TTS
             from utils import choose_random_song
             from config import get_fal_api_key, get_fal_model, ROOT_DIR, equalize_subtitles
 
@@ -230,10 +249,18 @@ def generate_video(self: Task, job_id: str, account_id: str, niche: str, languag
             publish("synthesize_audio", "running", "Synthesizing voice...", 62)
             update_step(db, "synthesize_audio", "running")
 
-            tts = TTS()
-            tts_path = os.path.join(ROOT_DIR, ".mp", str(uuid.uuid4()) + ".wav")
-            tts.synthesize(script, tts_path)
-            record_cost(db, "kittentts", "tts", 0.0, "kitten-tts-mini", {"chars": len(script)})
+            import edge_tts as _edge_tts
+            import asyncio as _asyncio
+
+            tts_voice = VOICE_MAP.get(language, "en-US-JennyNeural")
+            tts_path = os.path.join(ROOT_DIR, ".mp", str(uuid.uuid4()) + ".mp3")
+
+            async def _synthesize():
+                comm = _edge_tts.Communicate(script, tts_voice)
+                await comm.save(tts_path)
+
+            _asyncio.run(_synthesize())
+            record_cost(db, "edge_tts", "tts", 0.0, tts_voice, {"chars": len(script), "voice": tts_voice})
 
             update_step(db, "synthesize_audio", "done", f"Audio: {os.path.getsize(tts_path):,} bytes")
             publish("synthesize_audio", "done", "Audio synthesized", 70)
@@ -244,7 +271,8 @@ def generate_video(self: Task, job_id: str, account_id: str, niche: str, languag
 
             from faster_whisper import WhisperModel
             wmodel = WhisperModel("base", device="cpu", compute_type="int8")
-            segments, _ = wmodel.transcribe(tts_path, vad_filter=True)
+            whisper_lang = WHISPER_LANG_MAP.get(language, "en")
+            segments, _ = wmodel.transcribe(tts_path, vad_filter=True, language=whisper_lang)
 
             def fmt_ts(s):
                 ms = max(0, int(round(s * 1000)))

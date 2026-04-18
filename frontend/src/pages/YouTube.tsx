@@ -3,9 +3,47 @@ import { api, type Account, type Job, type PipelineStep } from "@/lib/api"
 import { useJobStream } from "@/hooks/useJobStream"
 import { PipelineView } from "@/components/PipelineView"
 import { cn } from "@/lib/utils"
-import { Video, Plus, Loader2, ChevronDown, ChevronUp, Trash2 } from "lucide-react"
+import { Video, Plus, Loader2, ChevronDown, ChevronUp, Trash2, Cpu, Mic, Image, Captions } from "lucide-react"
 
 const LANGUAGES = ["English", "Spanish", "Portuguese", "French", "German", "Italian", "Japanese"]
+
+const VOICE_MAP: Record<string, string> = {
+  English:    "en-US-JennyNeural",
+  Spanish:    "es-MX-DaliaNeural",
+  Portuguese: "pt-BR-FranciscaNeural",
+  French:     "fr-FR-DeniseNeural",
+  German:     "de-DE-KatjaNeural",
+  Italian:    "it-IT-ElsaNeural",
+  Japanese:   "ja-JP-NanamiNeural",
+}
+
+function ToolsPreview({ language, nImages = 3 }: { language: string; nImages?: number }) {
+  const voice = VOICE_MAP[language] ?? "en-US-JennyNeural"
+  const imgCost = (nImages * 0.003).toFixed(3)
+
+  const tools = [
+    { icon: <Cpu className="w-3.5 h-3.5" />, label: "LLM",    value: "Ollama",              badge: "local · free" },
+    { icon: <Mic className="w-3.5 h-3.5" />, label: "TTS",    value: `edge-tts · ${voice}`, badge: "Microsoft · free" },
+    { icon: <Image className="w-3.5 h-3.5" />, label: "Images", value: "FAL.AI FLUX schnell", badge: `${nImages} imgs · ~$${imgCost}` },
+    { icon: <Captions className="w-3.5 h-3.5" />, label: "STT",  value: "Whisper base",        badge: "local · free" },
+  ]
+
+  return (
+    <div className="rounded-lg border border-border/60 bg-secondary/40 p-3 space-y-2">
+      <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">Tools for this job</p>
+      <div className="grid grid-cols-1 gap-1.5">
+        {tools.map((t) => (
+          <div key={t.label} className="flex items-center gap-2 text-xs">
+            <span className="text-muted-foreground shrink-0">{t.icon}</span>
+            <span className="text-muted-foreground w-12 shrink-0">{t.label}</span>
+            <span className="font-mono text-foreground">{t.value}</span>
+            <span className="ml-auto text-muted-foreground/70 shrink-0">{t.badge}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 function VideoPlayer({ job }: { job: Job }) {
   const [videoId, setVideoId] = useState<string | null>(null)
@@ -258,6 +296,8 @@ export function YouTubePage() {
               {LANGUAGES.map((l) => <option key={l}>{l}</option>)}
             </select>
           </div>
+
+          <ToolsPreview language={language} />
 
           {error && <p className="text-xs text-red-400">{error}</p>}
 

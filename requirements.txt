@@ -15,6 +15,7 @@ Pillow>=10.0.0
 yagmail
 assemblyai
 faster-whisper
+edge-tts
 srt_equalizer
 undetected_chromedriver
 platformdirs

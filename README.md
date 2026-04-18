@@ -1,96 +1,77 @@
-# MoneyPrinter V2 — Enhanced Edition
+# 🖨️ MoneyPrinter V2 — Enhanced Edition
 
-> Built on top of the excellent [MoneyPrinterV2](https://github.com/FujiwaraChoki/MoneyPrinterV2) by [@FujiwaraChoki](https://github.com/FujiwaraChoki). Huge thanks for laying the foundation — the original automation workflows, Selenium integrations, and overall concept made this extension possible.
+<div align="center">
 
-This fork takes the original CLI tool and adds a full web platform on top of it: a React dashboard, a FastAPI backend with job queuing, real-time pipeline tracking, and a brand new AI-powered tech video renderer built with Remotion.
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688?style=for-the-badge&logo=fastapi&logoColor=white)
+![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black)
+![Node.js](https://img.shields.io/badge/Node.js-18+-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
+![License](https://img.shields.io/badge/License-AGPL%20v3-blue?style=for-the-badge)
 
----
+**AI-powered content creation platform. Generate tech videos, YouTube Shorts, and Twitter posts — fully self-hosted, no paid LLM APIs required.**
 
-## What Was Here Originally
+[Features](#-whats-new) · [Architecture](#-architecture) · [Setup](#-setup) · [Configuration](#-configuration) · [Roadmap](#-roadmap)
 
-The original MoneyPrinterV2 provides a Python CLI that automates four workflows:
-
-- **YouTube Shorts** — script → TTS → images → MoviePy video → Selenium upload
-- **Twitter Bot** — LLM-generated tweets posted via Selenium
-- **Affiliate Marketing** — Amazon scraping + LLM pitch + Twitter post
-- **Local Business Outreach** — Google Maps scraping + email cold outreach
-
-All of that still works and lives in `src/`.
+</div>
 
 ---
 
-## What We Built On Top
+> 🙏 Built on top of the excellent [MoneyPrinterV2](https://github.com/FujiwaraChoki/MoneyPrinterV2) by [@FujiwaraChoki](https://github.com/FujiwaraChoki). The original project provided the complete automation foundation — YouTube Shorts generation, Twitter posting, affiliate marketing, and local business outreach. Without that base, none of this would have been possible. Go give it a ⭐.
 
-### Web Dashboard
+---
 
-A full React + Vite + Tailwind dashboard to manage everything visually — no more CLI.
+## 🆕 What's New
 
-- **Dashboard** — live job feed, cost summary, recent activity
-- **YouTube** — submit and monitor Shorts generation jobs
-- **Twitter** — manage posting jobs per account
-- **Tech Videos** — new AI video pipeline (see below)
-- **Costs** — per-service cost tracking (fal.ai, Ollama, edge-tts, Whisper)
-- **Config** — edit `config.json` from the browser
+This fork keeps everything from the original CLI and adds a full web platform on top:
 
-Real-time pipeline events streamed via WebSocket — watch each step run live with progress %, status badges, and step detail.
-
-### FastAPI Backend
-
-Replaces the need to run the CLI manually. Exposes a REST API + WebSocket for the dashboard.
-
-- Job queue via **Celery + Redis**
-- **PostgreSQL** for persistent job, video, account, and cost records
-- Redis Pub/Sub → WebSocket for real-time step events
-- Typed Pydantic schemas throughout
-
-### Remotion Video Renderer (new)
-
-A Node.js microservice that renders fully animated MP4 videos using **Remotion 4** (React → headless Chromium → video).
-
-The full pipeline, triggered from the dashboard:
-
-```
-Web Search (Tavily, optional)        — fetch current docs/news about the topic
-    → Generate Script                — Ollama (Qwen2.5-Coder recommended)
-    → Generate Metadata              — YouTube title + description
-    → Generate Code Snippets         — 2–3 real code examples (tech-dark only)
-    → Generate Image Prompts
-    → Generate Images                — fal.ai FLUX
-    → Synthesize Voice               — edge-tts (7 languages, Microsoft Neural)
-    → Word-level Subtitles           — faster-whisper (TikTok-style, per-word timing)
-    → Render Video                   — Remotion 4 + Chromium → MP4
-```
-
-#### Templates
-
-| Template | Style |
+| Layer | What was added |
 |---|---|
-| `tech-dark` | Dark gradient, animated code blocks with line-by-line reveal, Ken Burns images |
-| `minimal` | Full-bleed images, vignette overlay, clean subtitles |
-| `bold` | Title card intro, flash cuts on scene change, accent color bar |
-| `reel` | Animated gradient backgrounds, pulse highlight behind subtitles |
+| 🎨 **React Dashboard** | Visual job management, real-time pipeline view, video player |
+| ⚙️ **FastAPI Backend** | REST API + WebSocket, PostgreSQL, Celery job queue |
+| 🎬 **Remotion Renderer** | Node.js microservice that renders animated MP4s with React |
+| 🤖 **Tech Video Pipeline** | 9-step AI pipeline: search → script → images → TTS → subtitles → render |
+| 💰 **Cost Tracking** | Per-service cost breakdown (fal.ai, Ollama, edge-tts, Whisper) |
 
-#### Resolutions
+---
 
-| | Size | For |
+## 🎬 Tech Video Pipeline
+
+The flagship new feature. Triggered from the dashboard, the full pipeline runs automatically:
+
+```
+🔍 Web Search          →  Tavily API (optional — fetch current docs/news)
+📝 Generate Script     →  Ollama (Qwen2.5-Coder recommended)
+🏷️  Generate Metadata  →  YouTube title + description
+💻 Code Snippets       →  2–3 real examples (tech-dark template)
+🖼️  Image Prompts      →  LLM-generated prompts
+🎨 Generate Images     →  fal.ai FLUX (~$0.003/image)
+🔊 Synthesize Voice    →  edge-tts (7 languages, Microsoft Neural)
+📋 Word Subtitles      →  faster-whisper (TikTok-style, per-word timing)
+🎥 Render Video        →  Remotion 4 + Chromium → MP4
+```
+
+Each step streams real-time progress to the dashboard via WebSocket.
+
+### Templates
+
+| Template | Style | Best for |
 |---|---|---|
-| `shorts` | 1080 × 1920 | YouTube Shorts, TikTok, Reels |
+| `tech-dark` | Dark gradient + animated code blocks + Ken Burns images | Programming tutorials |
+| `minimal` | Full-bleed images + vignette overlay | Clean explainers |
+| `bold` | Title card intro + flash cuts + accent bar | High-energy content |
+| `reel` | Animated gradient backgrounds + pulse highlight | Short-form reels |
+
+### Resolutions
+
+| Key | Size | Platform |
+|---|---|---|
+| `shorts` | 1080 × 1920 | YouTube Shorts · TikTok · Reels |
 | `landscape` | 1920 × 1080 | YouTube standard |
 | `square` | 1080 × 1080 | Instagram |
 
-#### Remotion Components
-
-- `GradientBackground` — animated angle sweep across video duration
-- `SubtitleWord` — sliding 3-word window, spring scale on active word
-- `ImageScene` — Ken Burns effect with alternating pan direction
-- `CodeBlock` — syntax highlighted, line-by-line entrance animation
-- `TitleCard` — slide-up spring, first-word accent color, fade out
-- `CodeTerminal` — terminal window UI with char-by-char typing effect
-- `SplitScreen` — 50/50 animated gradient divider
-
 ---
 
-## Architecture
+## 🏗️ Architecture
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -107,95 +88,133 @@ Web Search (Tavily, optional)        — fetch current docs/news about the topic
        │ Celery tasks             │ HTTP POST
 ┌──────▼──────────┐    ┌──────────▼──────────────────┐
 │  Celery Workers │    │  Remotion Service (Node.js)  │  :3001
-│  youtube        │    │  Express · Webpack bundle    │
-│  twitter        │    │  4 templates · 3 resolutions │
-│  remotion       │    │  Renders MP4 via Chromium    │
+│  • youtube      │    │  Express · Webpack bundle    │
+│  • twitter      │    │  4 templates · 3 resolutions │
+│  • remotion     │    │  Renders MP4 via Chromium    │
 └─────────────────┘    └─────────────────────────────┘
-       │
-┌──────▼──────────────────────────────────────────────┐
+         │
+┌────────▼────────────────────────────────────────────┐
 │                  Local Services                     │
-│  Ollama (LLM) · PostgreSQL · Redis · fal.ai (imgs)  │
-│  edge-tts (TTS) · faster-whisper (STT) · Tavily     │
+│  🦙 Ollama  ·  🐘 PostgreSQL  ·  🔴 Redis           │
+│  🎨 fal.ai  ·  🔊 edge-tts  ·  👂 faster-whisper   │
 └─────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Stack
+## 🧰 Stack
 
-| Layer | Tech |
+| Layer | Technology |
 |---|---|
-| Frontend | React 18, Vite, Tailwind CSS, shadcn/ui |
-| Backend | FastAPI, SQLAlchemy (async), PostgreSQL, Alembic |
-| Task Queue | Celery + Redis |
-| Real-time | Redis Pub/Sub → WebSocket |
-| LLM | Ollama (Qwen2.5-Coder, Llama3, Mistral, etc.) |
-| Image Gen | fal.ai (FLUX) |
-| TTS | edge-tts (Microsoft Neural voices, 7 languages) |
-| STT | faster-whisper (word-level timestamps) |
-| Video Render | Remotion 4 — React → MP4 via headless Chromium |
-| Web Search | Tavily API (optional) |
-| Browser Automation | Selenium + pre-authenticated Firefox profiles |
+| **Frontend** | React 18, Vite, Tailwind CSS, shadcn/ui |
+| **Backend** | FastAPI, SQLAlchemy (async), PostgreSQL, Alembic |
+| **Task Queue** | Celery + Redis |
+| **Real-time** | Redis Pub/Sub → WebSocket |
+| **LLM** | Ollama — Qwen2.5-Coder, Llama3, Mistral, etc. |
+| **Image Gen** | fal.ai (FLUX) |
+| **TTS** | edge-tts (Microsoft Neural voices, 7 languages) |
+| **STT** | faster-whisper (word-level timestamps) |
+| **Video Render** | Remotion 4 — React → MP4 via headless Chromium |
+| **Web Search** | Tavily API (optional) |
+| **Browser Automation** | Selenium + pre-authenticated Firefox profiles |
 
-Everything runs locally. The only paid external services are fal.ai (image generation, ~$0.003/image) and Tavily (web search, has a free tier).
-
----
-
-## Requirements
-
-- Python 3.12
-- Node.js 18+
-- PostgreSQL
-- Redis
-- [Ollama](https://ollama.ai) with at least one model pulled (`ollama pull qwen2.5-coder`)
-- Go — only for Local Business Outreach
+> 💡 The only paid external services are **fal.ai** (~$0.003/image) and **Tavily** (free tier available). Everything else runs locally.
 
 ---
 
-## Setup
+## 📋 Requirements
+
+- 🐍 **Python 3.12**
+- 🟢 **Node.js 18+**
+- 🐘 **PostgreSQL**
+- 🔴 **Redis**
+- 🦙 **[Ollama](https://ollama.ai)** with at least one model pulled
+- 🐹 **Go** — only needed for Local Business Outreach
+
+---
+
+## 🚀 Setup
+
+### 1. Clone
 
 ```bash
 git clone https://github.com/luisfarfan/MoneyPrinterV2.git
 cd MoneyPrinterV2
-
-# Python environment
-cp config.example.json config.json   # fill in values
-python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-
-# Remotion microservice
-cd remotion-service && npm install && cd ..
-
-# React dashboard
-cd frontend && npm install && cd ..
-
-# Environment variables
-cp .env.example .env   # fill in DATABASE_URL, REDIS_URL, FAL_KEY, TAVILY_API_KEY
 ```
 
-### Database migrations
+### 2. Python environment
+
+```bash
+cp config.example.json config.json   # then fill in your values
+python -m venv venv
+source venv/bin/activate             # Windows: .\venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+### 3. Remotion microservice
+
+```bash
+cd remotion-service
+npm install
+cd ..
+```
+
+### 4. React dashboard
+
+```bash
+cd frontend
+npm install
+cd ..
+```
+
+### 5. Environment variables
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env`:
+
+```env
+DATABASE_URL=postgresql+asyncpg://mpv2:mpv2@localhost:5432/mpv2
+REDIS_URL=redis://localhost:6379/0
+FAL_KEY=your_fal_api_key
+TAVILY_API_KEY=your_tavily_api_key   # optional
+```
+
+### 6. Database
 
 ```bash
 alembic upgrade head
 ```
 
-### Run (local dev — 4 terminals)
+### 7. Pull an LLM model
 
 ```bash
-# 1 — FastAPI
+ollama pull qwen2.5-coder
+```
+
+---
+
+## ▶️ Running
+
+Open **4 terminals** from the project root:
+
+```bash
+# Terminal 1 — FastAPI backend
 uvicorn backend.main:app --host 0.0.0.0 --port 8001
 
-# 2 — Celery worker
+# Terminal 2 — Celery worker
 celery -A backend.workers.celery_app worker --loglevel=info -Q remotion,youtube,twitter -c 1
 
-# 3 — Remotion renderer
+# Terminal 3 — Remotion renderer
 cd remotion-service && npx tsx src/server.ts
 
-# 4 — React dashboard
+# Terminal 4 — React dashboard
 cd frontend && npm run dev
 ```
 
-Open `http://localhost:5173`.
+Open **[http://localhost:5173](http://localhost:5173)** 🎉
 
 ### macOS quick setup
 
@@ -204,70 +223,87 @@ bash scripts/setup_local.sh
 python scripts/preflight_local.py
 ```
 
----
+### Docker (partial)
 
-## Configuration
-
-| Key | Where | Description |
-|---|---|---|
-| `ollama_model` | `config.json` | LLM model to use (`qwen2.5-coder:latest` recommended) |
-| `fal_key` / `FAL_KEY` | `.env` | fal.ai API key for image generation |
-| `tavily_api_key` | `.env` | Tavily web search (optional, improves script accuracy) |
-| `imagemagick_path` | `config.json` | Required for MoviePy subtitle rendering (YouTube pipeline) |
-| `firefox_profile` | `config.json` | Pre-authenticated Firefox profile for Selenium |
-| `DATABASE_URL` | `.env` | PostgreSQL connection string |
-| `REDIS_URL` | `.env` | Redis connection string |
+```bash
+docker-compose up
+```
 
 ---
 
-## Roadmap
+## ⚙️ Configuration
 
-### In Progress
+### `config.json` (Python CLI)
 
-- [ ] Web search for YouTube Shorts pipeline (same Tavily integration as tech videos)
-- [ ] Duration selector per job (30s / 60s / 90s / 120s) in YouTube pipeline
+| Key | Description |
+|---|---|
+| `ollama_model` | LLM model name (e.g. `qwen2.5-coder:latest`) |
+| `imagemagick_path` | Required for MoviePy subtitle rendering |
+| `firefox_profile` | Path to pre-authenticated Firefox profile |
 
-### Planned
+### `.env` (Backend + Remotion)
 
-- [ ] Music track library — royalty-free background music for Remotion templates
-- [ ] Auto-upload Remotion videos to YouTube
-- [ ] Twitter video posting (currently text only)
-- [ ] CRON scheduling for tech video jobs
-- [ ] Video thumbnail preview in job list
-- [ ] Cost budget alerts and limits per account
-- [ ] Full Docker Compose setup (one command to start everything)
-- [ ] Mobile-responsive dashboard
-- [ ] Support OpenAI / Anthropic as LLM providers alongside Ollama
+| Key | Description |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `REDIS_URL` | Redis connection string |
+| `FAL_KEY` | fal.ai API key — image generation |
+| `TAVILY_API_KEY` | Tavily API key — web search (optional) |
 
 ---
 
-## Project Structure
+## 🗺️ Roadmap
+
+### 🔧 In Progress
+
+- [ ] Web search integration for YouTube Shorts pipeline
+- [ ] Duration selector per job (30s / 60s / 90s / 120s)
+
+### 📅 Planned
+
+- [ ] 🎵 Background music library (royalty-free tracks for Remotion templates)
+- [ ] 📤 Auto-upload Remotion videos to YouTube
+- [ ] 🐦 Twitter video posting (currently text only)
+- [ ] ⏰ CRON scheduling for tech video jobs
+- [ ] 🖼️ Video thumbnail previews in job list
+- [ ] 💸 Cost budget alerts and per-account limits
+- [ ] 🐳 Full Docker Compose setup (one command for everything)
+- [ ] 📱 Mobile-responsive dashboard
+- [ ] 🔑 Support OpenAI / Anthropic as LLM providers alongside Ollama
+
+---
+
+## 📁 Project Structure
 
 ```
 MoneyPrinterV2/
 ├── src/                        # Original Python CLI (unchanged)
-│   ├── main.py
-│   ├── cron.py
+│   ├── main.py                 # Interactive menu
+│   ├── cron.py                 # Headless scheduler runner
 │   └── classes/                # YouTube, Twitter, AFM, Outreach, TTS
-├── backend/                    # FastAPI backend (new)
+│
+├── backend/                    # FastAPI backend ✨
 │   ├── models/                 # SQLAlchemy ORM (Job, Video, Account, Cost)
 │   ├── routes/                 # REST API routers
-│   ├── schemas/                # Pydantic schemas
+│   ├── schemas/                # Pydantic request/response schemas
 │   ├── workers/                # Celery tasks (youtube, twitter, remotion)
 │   └── settings.py
-├── remotion-service/           # Node.js video renderer (new)
+│
+├── remotion-service/           # Node.js video renderer ✨
 │   └── src/
 │       ├── server.ts           # Express API (/render, /health, /media)
-│       ├── renderer.ts         # Remotion bundle + renderMedia
-│       ├── types.ts            # Zod schemas
+│       ├── renderer.ts         # Remotion bundle + renderMedia logic
+│       ├── types.ts            # Zod schemas + shared types
 │       ├── compositions/       # TechDark, Minimal, Bold, Reel
-│       └── components/         # GradientBackground, SubtitleWord, ImageScene, ...
-├── frontend/                   # React dashboard (new)
+│       └── components/         # GradientBackground, SubtitleWord, ImageScene…
+│
+├── frontend/                   # React dashboard ✨
 │   └── src/
 │       ├── pages/              # Dashboard, YouTube, Twitter, TechVideo, Costs, Config
 │       ├── components/         # VideoPreview, PipelineView
 │       ├── hooks/              # useJobStream (WebSocket)
 │       └── lib/                # api.ts — typed fetch client
+│
 ├── docs/
 ├── scripts/
 ├── config.example.json
@@ -276,16 +312,23 @@ MoneyPrinterV2/
 
 ---
 
-## Acknowledgments
+## 🙏 Acknowledgments
 
-This project is built on top of [MoneyPrinterV2](https://github.com/FujiwaraChoki/MoneyPrinterV2) by [@FujiwaraChoki](https://github.com/FujiwaraChoki). The original project provided the complete automation foundation — YouTube Shorts generation, Twitter posting, affiliate marketing, and local business outreach. Without that base, none of this would have been possible. Go give it a star.
+| Project | Why |
+|---|---|
+| [MoneyPrinterV2](https://github.com/FujiwaraChoki/MoneyPrinterV2) by @FujiwaraChoki | The entire original automation foundation this fork is built on |
+| [Remotion](https://remotion.dev) | React-based video rendering engine |
+| [Ollama](https://ollama.ai) | Local LLM inference |
+| [fal.ai](https://fal.ai) | Fast image generation API |
+| [edge-tts](https://github.com/rany2/edge-tts) | Microsoft Neural TTS voices |
+| [faster-whisper](https://github.com/SYSTRAN/faster-whisper) | Word-level speech transcription |
 
 ---
 
-## License
+## 📄 License
 
-Licensed under the `Affero General Public License v3.0`. See [LICENSE](LICENSE) for details.
+Licensed under the **GNU Affero General Public License v3.0** — same as the original project. See [LICENSE](LICENSE) for details.
 
-## Disclaimer
+## ⚠️ Disclaimer
 
 For educational purposes only. All automation must comply with the terms of service of the platforms being accessed. The authors are not responsible for any misuse.

@@ -39,6 +39,7 @@ WHISPER_LANG_MAP = {
 }
 
 STEPS = [
+    "web_search",
     "generate_topic",
     "generate_script",
     "generate_metadata",
@@ -49,6 +50,9 @@ STEPS = [
     "compose_video",
 ]
 
+DURATION_WORDS = {"30s": 75, "60s": 150, "90s": 225, "120s": 300}
+DURATION_IMAGES = {"30s": 3,  "60s": 4,  "90s": 5,  "120s": 6}
+
 
 def _run(coro):
     """Run async coroutine from sync Celery task."""
@@ -56,7 +60,16 @@ def _run(coro):
 
 
 @celery_app.task(bind=True, max_retries=2, default_retry_delay=30, name="youtube.generate_video")
-def generate_video(self: Task, job_id: str, account_id: str, niche: str, language: str) -> dict:
+def generate_video(
+    self: Task,
+    job_id: str,
+    account_id: str,
+    niche: str,
+    language: str,
+    topic: str | None = None,
+    web_search_enabled: bool = False,
+    duration_hint: str = "60s",
+) -> dict:
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker, Session
     from backend.models.job import Job, PipelineStep
@@ -150,34 +163,80 @@ def generate_video(self: Task, job_id: str, account_id: str, niche: str, languag
             total_cost = 0.0
             os.makedirs(os.path.join(ROOT_DIR, ".mp"), exist_ok=True)
 
-            # ── STEP 1: generate_topic ──────────────────────────────────
-            publish("generate_topic", "running", "Generating video topic...", 10)
-            update_step(db, "generate_topic", "running")
+            target_words = DURATION_WORDS.get(duration_hint, 150)
+            n_images = DURATION_IMAGES.get(duration_hint, 4)
 
-            topic = generate_text(
-                f"Give me one YouTube Shorts video idea about: {niche}. "
-                "Return ONLY the idea, no intro text, no quotes.",
-                max_tokens=60,
+            # ── STEP 1: web_search ──────────────────────────────────────
+            search_context = ""
+            search_query = topic or niche
+            if web_search_enabled and settings.tavily_api_key:
+                publish("web_search", "running", f"Searching: {search_query}...", 8)
+                update_step(db, "web_search", "running")
+                try:
+                    import requests as _req
+                    resp = _req.post(
+                        "https://api.tavily.com/search",
+                        json={
+                            "api_key": settings.tavily_api_key,
+                            "query": search_query,
+                            "max_results": 5,
+                            "search_depth": "basic",
+                            "include_answer": True,
+                        },
+                        timeout=15,
+                    )
+                    data = resp.json()
+                    results = data.get("results", [])
+                    search_context = "\n\n".join(
+                        f"Source: {r['title']}\n{r['content'][:500]}"
+                        for r in results[:4]
+                    )
+                    detail = f"{len(results)} sources found"
+                    update_step(db, "web_search", "done", detail, {"sources": len(results)})
+                    publish("web_search", "done", detail, 12, 0.0, {"sources": len(results)})
+                except Exception as e:
+                    update_step(db, "web_search", "skipped", f"Search failed: {e}")
+                    publish("web_search", "skipped", "Skipped (search unavailable)", 12)
+            else:
+                update_step(db, "web_search", "skipped", "Web search disabled")
+                publish("web_search", "skipped", "Web search disabled", 12)
+
+            context_block = (
+                f"\n\nResearch context (use for accuracy):\n{search_context}"
+                if search_context else ""
             )
-            topic = topic.strip().strip('"')
-            cost = record_cost(db, "ollama", "generate_text", 0.0, "ollama", {"topic": topic})
 
-            update_step(db, "generate_topic", "done", topic, {"topic": topic})
-            publish("generate_topic", "done", topic, 15, cost, {"topic": topic})
+            # ── STEP 2: generate_topic ──────────────────────────────────
+            if topic:
+                update_step(db, "generate_topic", "skipped", f"Topic provided: {topic}")
+                publish("generate_topic", "skipped", f"Using: {topic}", 15)
+            else:
+                publish("generate_topic", "running", "Generating video topic...", 13)
+                update_step(db, "generate_topic", "running")
+                topic = generate_text(
+                    f"Give me one YouTube Shorts video idea about: {niche}."
+                    f"{context_block}\n"
+                    "Return ONLY the idea, no intro text, no quotes.",
+                    max_tokens=60,
+                ).strip().strip('"')
+                record_cost(db, "ollama", "generate_text", 0.0, "ollama", {"topic": topic})
+                update_step(db, "generate_topic", "done", topic, {"topic": topic})
+                publish("generate_topic", "done", topic, 15, 0.0, {"topic": topic})
 
-            # ── STEP 2: generate_script ─────────────────────────────────
-            publish("generate_script", "running", "Writing script...", 20)
+            # ── STEP 3: generate_script ─────────────────────────────────
+            publish("generate_script", "running", "Writing script...", 18)
             update_step(db, "generate_script", "running")
 
             script = generate_text(
-                f"Write a 4-sentence YouTube Shorts script about: {topic}. "
+                f"Write a {target_words}-word YouTube Shorts script about: {topic}. "
                 f"Language: {language}. "
-                "Return ONLY the script, no labels, no markdown, no intro text.",
-                max_tokens=300,
+                f"Style: engaging, conversational, no filler words. "
+                f"Return ONLY the script, no labels, no markdown.{context_block}",
+                max_tokens=target_words * 2,
             )
             script = re.sub(r"\*", "", script).strip()
             update_step(db, "generate_script", "done", script[:100] + "...", {"script": script})
-            publish("generate_script", "done", script[:80] + "...", 28, 0.0, {"script": script})
+            publish("generate_script", "done", script[:80] + "...", 26, 0.0, {"script": script})
 
             # ── STEP 3: generate_metadata ───────────────────────────────
             publish("generate_metadata", "running", "Generating title & description...", 30)
@@ -202,14 +261,14 @@ def generate_video(self: Task, job_id: str, account_id: str, niche: str, languag
             update_step(db, "generate_image_prompts", "running")
 
             raw = generate_text(
-                f'Generate 3 image prompts for AI image generation about: {topic}. '
-                'Return ONLY a JSON array: ["prompt1","prompt2","prompt3"]',
-                max_tokens=120,
+                f"Generate {n_images} image prompts for AI image generation about: {topic}. "
+                f"Return ONLY a JSON array of {n_images} strings.",
+                max_tokens=200,
             ).replace("```json", "").replace("```", "").strip()
             try:
-                image_prompts = json.loads(raw)[:3]
+                image_prompts = json.loads(raw)[:n_images]
             except Exception:
-                image_prompts = [f"{topic}, cinematic lighting, vivid colors"] * 3
+                image_prompts = [f"{topic}, cinematic lighting, vivid colors"] * n_images
 
             update_step(db, "generate_image_prompts", "done", f"{len(image_prompts)} prompts", {"prompts": image_prompts})
             publish("generate_image_prompts", "done", f"{len(image_prompts)} prompts ready", 44, 0.0, {"prompts": image_prompts})

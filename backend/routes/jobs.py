@@ -22,12 +22,23 @@ async def create_youtube_job(req: GenerateVideoRequest, db: AsyncSession = Depen
     job = Job(
         type="youtube_generate",
         account_id=req.account_id,
-        input={"niche": req.niche, "language": req.language, "model": req.model},
+        input={
+            "niche": req.niche,
+            "topic": req.topic,
+            "language": req.language,
+            "model": req.model,
+            "web_search_enabled": req.web_search_enabled,
+            "duration_hint": req.duration_hint,
+        },
     )
     db.add(job)
     await db.commit()
     await db.refresh(job)
-    task = generate_video.delay(str(job.id), str(req.account_id), req.niche, req.language)
+    task = generate_video.delay(
+        str(job.id), str(req.account_id),
+        req.niche, req.language,
+        req.topic, req.web_search_enabled, req.duration_hint,
+    )
     job.celery_task_id = task.id
     await db.commit()
     return {"job_id": str(job.id), "status": "pending"}

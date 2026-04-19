@@ -3,7 +3,9 @@ import { api, type Account, type Job, type PipelineStep } from "@/lib/api"
 import { useJobStream } from "@/hooks/useJobStream"
 import { PipelineView } from "@/components/PipelineView"
 import { cn } from "@/lib/utils"
-import { Video, Plus, Loader2, ChevronDown, ChevronUp, Trash2, Cpu, Mic, Image, Captions } from "lucide-react"
+import { Video, Plus, Loader2, ChevronDown, ChevronUp, Trash2, Cpu, Mic, Image, Captions, Search } from "lucide-react"
+
+const DURATIONS = ["30s", "60s", "90s", "120s"]
 
 const LANGUAGES = ["English", "Spanish", "Portuguese", "French", "German", "Italian", "Japanese"]
 
@@ -17,20 +19,28 @@ const VOICE_MAP: Record<string, string> = {
   Japanese:   "ja-JP-NanamiNeural",
 }
 
-function ToolsPreview({ language, nImages = 3 }: { language: string; nImages?: number }) {
+const DURATION_IMAGES: Record<string, number> = { "30s": 3, "60s": 4, "90s": 5, "120s": 6 }
+const DURATION_WORDS: Record<string, number>  = { "30s": 75, "60s": 150, "90s": 225, "120s": 300 }
+
+function ToolsPreview({ language, duration = "60s", webSearch = false }: { language: string; duration?: string; webSearch?: boolean }) {
   const voice = VOICE_MAP[language] ?? "en-US-JennyNeural"
+  const nImages = DURATION_IMAGES[duration] ?? 4
   const imgCost = (nImages * 0.003).toFixed(3)
 
+  const words = DURATION_WORDS[duration] ?? 150
   const tools = [
-    { icon: <Cpu className="w-3.5 h-3.5" />, label: "LLM",    value: "Ollama",              badge: "local · free" },
-    { icon: <Mic className="w-3.5 h-3.5" />, label: "TTS",    value: `edge-tts · ${voice}`, badge: "Microsoft · free" },
-    { icon: <Image className="w-3.5 h-3.5" />, label: "Images", value: "FAL.AI FLUX schnell", badge: `${nImages} imgs · ~$${imgCost}` },
-    { icon: <Captions className="w-3.5 h-3.5" />, label: "STT",  value: "Whisper base",        badge: "local · free" },
+    { icon: <Cpu className="w-3.5 h-3.5" />,     label: "LLM",    value: "Ollama",              badge: "local · free" },
+    { icon: <Search className="w-3.5 h-3.5" />,   label: "Search", value: webSearch ? "Tavily API" : "Disabled", badge: webSearch ? "web · free tier" : "—" },
+    { icon: <Mic className="w-3.5 h-3.5" />,      label: "TTS",    value: `edge-tts · ${voice}`, badge: "Microsoft · free" },
+    { icon: <Image className="w-3.5 h-3.5" />,    label: "Images", value: "FAL.AI FLUX schnell", badge: `${nImages} imgs · ~$${imgCost}` },
+    { icon: <Captions className="w-3.5 h-3.5" />, label: "STT",    value: "Whisper base",        badge: "local · free" },
   ]
 
   return (
     <div className="rounded-lg border border-border/60 bg-secondary/40 p-3 space-y-2">
-      <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">Tools for this job</p>
+      <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">
+        Tools · ~{words} words · {nImages} images
+      </p>
       <div className="grid grid-cols-1 gap-1.5">
         {tools.map((t) => (
           <div key={t.label} className="flex items-center gap-2 text-xs">
@@ -110,9 +120,11 @@ function JobRow({ job, onRefresh }: { job: Job; onRefresh: () => void }) {
         <Video className="w-4 h-4 text-muted-foreground shrink-0" />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium truncate">
-            {(job.input?.niche as string) ?? "YouTube video"}
+            {(job.input?.topic as string) || (job.input?.niche as string) || "YouTube video"}
           </p>
           <p className="text-xs text-muted-foreground">
+            {[job.input?.duration_hint as string, job.input?.language as string].filter(Boolean).join(" · ")}
+            {" · "}
             {new Date(job.created_at).toLocaleString()}
           </p>
         </div>
@@ -168,7 +180,10 @@ export function YouTubePage() {
   // job form
   const [accountId, setAccountId] = useState("")
   const [niche, setNiche] = useState("")
+  const [topic, setTopic] = useState("")
   const [language, setLanguage] = useState("English")
+  const [duration, setDuration] = useState("60s")
+  const [webSearch, setWebSearch] = useState(false)
 
   // new account form
   const [accNickname, setAccNickname] = useState("")
@@ -195,8 +210,15 @@ export function YouTubePage() {
     setSubmitting(true)
     setError("")
     try {
-      await api.jobs.createYoutube({ account_id: accountId, niche: niche.trim(), language })
-      setNiche("")
+      await api.jobs.createYoutube({
+        account_id: accountId,
+        niche: niche.trim(),
+        topic: topic.trim() || undefined,
+        language,
+        web_search_enabled: webSearch,
+        duration_hint: duration,
+      })
+      setNiche(""); setTopic("")
       setShowForm(false)
       load()
     } catch (err) {
@@ -277,27 +299,71 @@ export function YouTubePage() {
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Niche / topic</label>
+            <label className="text-xs text-muted-foreground">Niche</label>
             <input
               value={niche}
               onChange={(e) => setNiche(e.target.value)}
-              placeholder="e.g. funny cats, finance tips, cooking"
+              placeholder="e.g. finance tips, cooking, fitness"
               className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm placeholder:text-muted-foreground"
             />
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Language</label>
-            <select
-              value={language}
-              onChange={(e) => setLanguage(e.target.value)}
-              className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm"
-            >
-              {LANGUAGES.map((l) => <option key={l}>{l}</option>)}
-            </select>
+            <label className="text-xs text-muted-foreground">
+              Specific topic <span className="text-muted-foreground/50">(optional — skips topic generation)</span>
+            </label>
+            <input
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              placeholder="e.g. 5 habits of millionaires"
+              className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm placeholder:text-muted-foreground"
+            />
           </div>
 
-          <ToolsPreview language={language} />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Language</label>
+              <select
+                value={language}
+                onChange={(e) => setLanguage(e.target.value)}
+                className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm"
+              >
+                {LANGUAGES.map((l) => <option key={l}>{l}</option>)}
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Duration</label>
+              <select
+                value={duration}
+                onChange={(e) => setDuration(e.target.value)}
+                className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm"
+              >
+                {DURATIONS.map((d) => <option key={d}>{d}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <div
+              onClick={() => setWebSearch((v) => !v)}
+              className={cn(
+                "w-9 h-5 rounded-full transition-colors relative",
+                webSearch ? "bg-blue-500" : "bg-secondary border border-border",
+              )}
+            >
+              <div className={cn(
+                "absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all",
+                webSearch ? "left-4" : "left-0.5",
+              )} />
+            </div>
+            <Search className="w-3.5 h-3.5 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">
+              Web search <span className="text-muted-foreground/50">(Tavily — improves accuracy)</span>
+            </span>
+          </label>
+
+          <ToolsPreview language={language} duration={duration} webSearch={webSearch} />
 
           {error && <p className="text-xs text-red-400">{error}</p>}
 

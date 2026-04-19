@@ -123,8 +123,14 @@ export const api = {
     },
     get: (id: string) => get<Job>(`/jobs/${id}`),
     steps: (id: string) => get<PipelineStep[]>(`/jobs/${id}/steps`),
-    createYoutube: (body: { account_id: string; niche: string; language: string }) =>
-      post<{ job_id: string; status: string }>("/jobs/youtube/generate", body),
+    createYoutube: (body: {
+      account_id: string
+      niche: string
+      topic?: string
+      language: string
+      web_search_enabled?: boolean
+      duration_hint?: string
+    }) => post<{ job_id: string; status: string }>("/jobs/youtube/generate", body),
     createTwitter: (body: { account_id: string; topic: string }) =>
       post<{ job_id: string; status: string }>("/jobs/twitter/post", body),
     createRemotion: (body: {

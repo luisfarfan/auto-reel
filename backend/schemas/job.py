@@ -6,8 +6,11 @@ from pydantic import BaseModel
 class GenerateVideoRequest(BaseModel):
     account_id: uuid.UUID
     niche: str
+    topic: str | None = None          # if set, skips generate_topic step
     language: str = "English"
     model: str = "llama3.1:latest"
+    web_search_enabled: bool = False
+    duration_hint: str = "60s"        # 30s | 60s | 90s | 120s
 
 
 class GenerateTechVideoRequest(BaseModel):

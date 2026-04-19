@@ -30,6 +30,8 @@ This fork keeps everything from the original CLI and adds a full web platform on
 | ⚙️ **FastAPI Backend** | REST API + WebSocket, PostgreSQL, Celery job queue |
 | 🎬 **Remotion Renderer** | Node.js microservice that renders animated MP4s with React |
 | 🤖 **Tech Video Pipeline** | 9-step AI pipeline: search → script → images → TTS → subtitles → render |
+| 📹 **YouTube Shorts Pipeline** | 10-step pipeline with web search, duration control, topic override, and auto-upload |
+| 🔗 **Account Connect Flow** | One-click Firefox session capture — log in once, all uploads automated |
 | 💰 **Cost Tracking** | Per-service cost breakdown (fal.ai, Ollama, edge-tts, Whisper) |
 
 ---
@@ -68,6 +70,45 @@ Each step streams real-time progress to the dashboard via WebSocket.
 | `shorts` | 1080 × 1920 | YouTube Shorts · TikTok · Reels |
 | `landscape` | 1920 × 1080 | YouTube standard |
 | `square` | 1080 × 1080 | Instagram |
+
+---
+
+## 📹 YouTube Shorts Pipeline
+
+Classic shorts pipeline — generate, compose, and optionally upload in one click:
+
+```
+🔍 Web Search          →  Tavily API (optional — improves script accuracy)
+💡 Generate Topic      →  Ollama LLM (skipped if topic provided manually)
+📝 Generate Script     →  Ollama LLM (~75–300 words depending on duration)
+🏷️  Generate Metadata  →  YouTube title + description
+🖼️  Image Prompts      →  LLM-generated prompts (3–6 images)
+🎨 Generate Images     →  fal.ai FLUX schnell (~$0.003/image)
+🔊 Synthesize Voice    →  edge-tts (7 languages, Microsoft Neural)
+📋 Generate Subtitles  →  faster-whisper base (word-level SRT)
+🎞️  Compose Video      →  MoviePy — images + TTS + background music + subtitles
+📤 Upload to YouTube   →  Selenium Firefox (skipped if auto-upload is off)
+```
+
+| Option | Values | Default |
+|---|---|---|
+| Duration | `30s` · `60s` · `90s` · `120s` | `60s` |
+| Language | English, Spanish, Portuguese, French, German, Italian, Japanese | English |
+| Topic | Free text (skips topic generation step) | — |
+| Web search | on / off | off |
+| Auto-upload | on / off | off |
+
+### Account Connect Flow
+
+No credentials stored. Session captured once from the browser:
+
+1. Create an account in the dashboard (YouTube or Twitter)
+2. Click **Connect** → Firefox opens to the platform login page
+3. Log in normally in the browser window
+4. Dashboard detects the session cookie automatically and saves the Firefox profile
+5. All future jobs use that profile — fully automated
+
+Real-time status streams back via WebSocket: `opening → waiting → detected → connected`.
 
 ---
 
@@ -254,22 +295,28 @@ docker-compose up
 
 ## 🗺️ Roadmap
 
-### 🔧 In Progress
+### ✅ Done
 
-- [ ] Web search integration for YouTube Shorts pipeline
-- [ ] Duration selector per job (30s / 60s / 90s / 120s)
+- [x] Web search integration for YouTube Shorts pipeline (Tavily)
+- [x] Duration selector per job (30s / 60s / 90s / 120s)
+- [x] Topic override (skip LLM topic generation)
+- [x] Account connect flow — one-click Firefox session capture (YouTube + Twitter)
+- [x] Auto-upload YouTube Shorts via Selenium after generation
+- [x] Real-time pipeline progress via WebSocket
+- [x] Cost tracking per service and per job
 
 ### 📅 Planned
 
 - [ ] 🎵 Background music library (royalty-free tracks for Remotion templates)
 - [ ] 📤 Auto-upload Remotion videos to YouTube
 - [ ] 🐦 Twitter video posting (currently text only)
-- [ ] ⏰ CRON scheduling for tech video jobs
+- [ ] ⏰ CRON scheduling for automated posting
 - [ ] 🖼️ Video thumbnail previews in job list
 - [ ] 💸 Cost budget alerts and per-account limits
 - [ ] 🐳 Full Docker Compose setup (one command for everything)
 - [ ] 📱 Mobile-responsive dashboard
 - [ ] 🔑 Support OpenAI / Anthropic as LLM providers alongside Ollama
+- [ ] 🖥️ Virtual display (Xvfb) for headless server deployments
 
 ---
 
@@ -300,7 +347,7 @@ MoneyPrinterV2/
 ├── frontend/                   # React dashboard ✨
 │   └── src/
 │       ├── pages/              # Dashboard, YouTube, Twitter, TechVideo, Costs, Config
-│       ├── components/         # VideoPreview, PipelineView
+│       ├── components/         # VideoPreview, PipelineView, AccountRow
 │       ├── hooks/              # useJobStream (WebSocket)
 │       └── lib/                # api.ts — typed fetch client
 │

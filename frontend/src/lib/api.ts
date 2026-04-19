@@ -31,6 +31,8 @@ export interface Account {
   language: string | null
   topic: string | null
   firefox_profile_path: string | null
+  connected: boolean
+  last_connected_at: string | null
   created_at: string
 }
 
@@ -51,6 +53,7 @@ export interface VideoRecord {
   job_id: string | null
   title: string | null
   file_path: string | null
+  youtube_url: string | null
   duration_seconds: number | null
   file_size_bytes: number | null
   created_at: string
@@ -130,6 +133,7 @@ export const api = {
       language: string
       web_search_enabled?: boolean
       duration_hint?: string
+      auto_upload?: boolean
     }) => post<{ job_id: string; status: string }>("/jobs/youtube/generate", body),
     createTwitter: (body: { account_id: string; topic: string }) =>
       post<{ job_id: string; status: string }>("/jobs/twitter/post", body),
@@ -156,6 +160,8 @@ export const api = {
       get<Account[]>(`/accounts${platform ? `?platform=${platform}` : ""}`),
     create: (body: Partial<Account>) => post<Account>("/accounts", body),
     delete: (id: string) => del<{ deleted: string }>(`/accounts/${id}`),
+    connect: (id: string) => post<{ status: string; message: string }>(`/accounts/${id}/connect`, {}),
+    connectStatus: (id: string) => get<{ status: string; message: string }>(`/accounts/${id}/connect/status`),
   },
   costs: {
     summary: () => get<CostSummary>("/costs"),

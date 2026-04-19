@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react"
 import { api, type Account, type Job } from "@/lib/api"
+import { AccountRow } from "@/components/AccountRow"
 import { cn } from "@/lib/utils"
-import { AtSign, Plus, Loader2, Trash2 } from "lucide-react"
+import { AtSign, Plus, Loader2 } from "lucide-react"
 
 function JobRow({ job }: { job: Job }) {
   const statusColor: Record<Job["status"], string> = {
@@ -234,16 +235,14 @@ export function TwitterPage() {
         )}
 
         {accounts.map((a) => (
-          <div key={a.id} className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3">
-            <AtSign className="w-4 h-4 text-muted-foreground shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium">{a.nickname}</p>
-              {a.topic && <p className="text-xs text-muted-foreground">{a.topic}</p>}
-            </div>
-            <button onClick={() => deleteAccount(a.id)} className="text-muted-foreground hover:text-red-400 transition-colors">
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
+          <AccountRow
+            key={a.id}
+            account={a}
+            icon={<AtSign className="w-4 h-4" />}
+            subtitle={a.topic ?? undefined}
+            onDelete={deleteAccount}
+            onRefresh={load}
+          />
         ))}
 
         {accounts.length === 0 && !showNewAccount && (

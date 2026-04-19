@@ -20,6 +20,8 @@ class AccountResponse(BaseModel):
     language: str | None
     topic: str | None
     firefox_profile_path: str | None
+    connected: bool
+    last_connected_at: datetime | None
     created_at: datetime
 
     model_config = {"from_attributes": True}

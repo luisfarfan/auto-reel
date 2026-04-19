@@ -42,6 +42,28 @@ async def health():
     return {"status": "ok", "version": "2.0.0"}
 
 
+@app.websocket("/ws/accounts/{account_id}")
+async def account_websocket(websocket: WebSocket, account_id: str):
+    await websocket.accept()
+    r = aioredis.from_url(settings.redis_url, decode_responses=True)
+    pubsub = r.pubsub()
+    await pubsub.subscribe(f"account:{account_id}")
+    try:
+        async for message in pubsub.listen():
+            if message["type"] != "message":
+                continue
+            data = json.loads(message["data"])
+            await websocket.send_json(data)
+            if data.get("status") in ("connected", "timeout", "failed"):
+                break
+    except WebSocketDisconnect:
+        pass
+    finally:
+        await pubsub.unsubscribe(f"account:{account_id}")
+        await pubsub.close()
+        await r.aclose()
+
+
 @app.websocket("/ws/jobs/{job_id}")
 async def job_websocket(websocket: WebSocket, job_id: str):
     await websocket.accept()

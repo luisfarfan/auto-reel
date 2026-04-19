@@ -11,6 +11,7 @@ class GenerateVideoRequest(BaseModel):
     model: str = "llama3.1:latest"
     web_search_enabled: bool = False
     duration_hint: str = "60s"        # 30s | 60s | 90s | 120s
+    auto_upload: bool = False
 
 
 class GenerateTechVideoRequest(BaseModel):

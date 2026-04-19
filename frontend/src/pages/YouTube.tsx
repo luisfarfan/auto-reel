@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from "react"
 import { api, type Account, type Job, type PipelineStep } from "@/lib/api"
 import { useJobStream } from "@/hooks/useJobStream"
 import { PipelineView } from "@/components/PipelineView"
+import { AccountRow } from "@/components/AccountRow"
 import { cn } from "@/lib/utils"
-import { Video, Plus, Loader2, ChevronDown, ChevronUp, Trash2, Cpu, Mic, Image, Captions, Search } from "lucide-react"
+import { Video, Plus, Loader2, ChevronDown, ChevronUp, Cpu, Mic, Image, Captions, Search, Upload } from "lucide-react"
 
 const DURATIONS = ["30s", "60s", "90s", "120s"]
 
@@ -184,6 +185,7 @@ export function YouTubePage() {
   const [language, setLanguage] = useState("English")
   const [duration, setDuration] = useState("60s")
   const [webSearch, setWebSearch] = useState(false)
+  const [autoUpload, setAutoUpload] = useState(false)
 
   // new account form
   const [accNickname, setAccNickname] = useState("")
@@ -217,6 +219,7 @@ export function YouTubePage() {
         language,
         web_search_enabled: webSearch,
         duration_hint: duration,
+        auto_upload: autoUpload,
       })
       setNiche(""); setTopic("")
       setShowForm(false)
@@ -363,6 +366,26 @@ export function YouTubePage() {
             </span>
           </label>
 
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <div
+              onClick={() => setAutoUpload((v) => !v)}
+              className={cn(
+                "w-9 h-5 rounded-full transition-colors relative",
+                autoUpload ? "bg-green-500" : "bg-secondary border border-border",
+              )}
+            >
+              <div className={cn(
+                "absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all",
+                autoUpload ? "left-4" : "left-0.5",
+              )} />
+            </div>
+            <Upload className="w-3.5 h-3.5 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">
+              Auto-upload to YouTube{" "}
+              <span className="text-muted-foreground/50">(requires connected account)</span>
+            </span>
+          </label>
+
           <ToolsPreview language={language} duration={duration} webSearch={webSearch} />
 
           {error && <p className="text-xs text-red-400">{error}</p>}
@@ -458,21 +481,14 @@ export function YouTubePage() {
         )}
 
         {accounts.map((a) => (
-          <div key={a.id} className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3">
-            <Video className="w-4 h-4 text-muted-foreground shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium">{a.nickname}</p>
-              <p className="text-xs text-muted-foreground">
-                {[a.niche, a.language].filter(Boolean).join(" · ")}
-              </p>
-            </div>
-            <button
-              onClick={() => deleteAccount(a.id)}
-              className="text-muted-foreground hover:text-red-400 transition-colors"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
+          <AccountRow
+            key={a.id}
+            account={a}
+            icon={<Video className="w-4 h-4" />}
+            subtitle={[a.niche, a.language].filter(Boolean).join(" · ")}
+            onDelete={deleteAccount}
+            onRefresh={load}
+          />
         ))}
 
         {accounts.length === 0 && !showNewAccount && (

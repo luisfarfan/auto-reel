@@ -48,6 +48,7 @@ STEPS = [
     "synthesize_audio",
     "generate_subtitles",
     "compose_video",
+    "upload_youtube",
 ]
 
 DURATION_WORDS = {"30s": 75, "60s": 150, "90s": 225, "120s": 300}
@@ -69,6 +70,7 @@ def generate_video(
     topic: str | None = None,
     web_search_enabled: bool = False,
     duration_hint: str = "60s",
+    auto_upload: bool = False,
 ) -> dict:
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker, Session
@@ -418,20 +420,113 @@ def generate_video(
             )
             db.add(video)
             db.flush()
+            video_id_str = str(video.id)
+
+            # ── STEP 9: upload_youtube ──────────────────────────────────
+            youtube_url = None
+            if auto_upload:
+                publish("upload_youtube", "running", "Opening Firefox to upload...", 99)
+                update_step(db, "upload_youtube", "running")
+                try:
+                    from backend.models.account import Account as _Account
+                    account = db.get(_Account, uuid.UUID(account_id))
+                    profile_path = account.firefox_profile_path if account else None
+                    if not profile_path:
+                        raise RuntimeError("Account has no Firefox profile. Connect the account first.")
+
+                    from selenium import webdriver
+                    from selenium.webdriver.firefox.options import Options
+                    from selenium.webdriver.firefox.service import Service
+                    from selenium.webdriver.common.by import By
+                    from webdriver_manager.firefox import GeckoDriverManager
+                    import time as _time
+
+                    opts = Options()
+                    opts.add_argument("-profile")
+                    opts.add_argument(profile_path)
+                    service = Service(GeckoDriverManager().install())
+                    driver = webdriver.Firefox(service=service, options=opts)
+
+                    try:
+                        driver.get("https://www.youtube.com/upload")
+                        _time.sleep(3)
+
+                        file_input = driver.find_element(By.TAG_NAME, "ytcp-uploads-file-picker").find_element(By.TAG_NAME, "input")
+                        file_input.send_keys(out_path)
+                        publish("upload_youtube", "running", "Uploading file...", 99)
+                        _time.sleep(8)
+
+                        textboxes = driver.find_elements(By.ID, "textbox")
+                        textboxes[0].click(); _time.sleep(0.5)
+                        textboxes[0].clear()
+                        textboxes[0].send_keys(title)
+                        _time.sleep(10)
+                        textboxes[-1].click(); _time.sleep(0.5)
+                        textboxes[-1].clear()
+                        textboxes[-1].send_keys(description)
+                        _time.sleep(0.5)
+
+                        driver.find_element(By.NAME, "VIDEO_MADE_FOR_KIDS_NOT_MFK").click()
+                        _time.sleep(0.5)
+
+                        for _ in range(3):
+                            driver.find_element(By.ID, "next-button").click()
+                            _time.sleep(2)
+
+                        radio_buttons = driver.find_elements(By.XPATH, '//*[@id="radioLabel"]')
+                        radio_buttons[2].click()  # unlisted
+                        _time.sleep(0.5)
+
+                        driver.find_element(By.ID, "done-button").click()
+                        _time.sleep(3)
+
+                        # Grab URL from Studio
+                        from sqlalchemy import text as _sql_text
+                        channel_id_result = driver.current_url  # fallback
+                        driver.get("https://studio.youtube.com")
+                        _time.sleep(2)
+                        channel_id = driver.current_url.rstrip("/").split("/")[-1]
+                        driver.get(f"https://studio.youtube.com/channel/{channel_id}/videos/short")
+                        _time.sleep(3)
+                        rows = driver.find_elements(By.TAG_NAME, "ytcp-video-row")
+                        if rows:
+                            href = rows[0].find_element(By.TAG_NAME, "a").get_attribute("href")
+                            vid_id = href.split("/")[-2]
+                            youtube_url = f"https://www.youtube.com/shorts/{vid_id}"
+                    finally:
+                        driver.quit()
+
+                    video.youtube_url = youtube_url
+                    db.commit()
+                    update_step(db, "upload_youtube", "done", youtube_url or "Uploaded", {"youtube_url": youtube_url})
+                    publish("upload_youtube", "done", youtube_url or "Uploaded", 100, 0.0, {"youtube_url": youtube_url})
+
+                except Exception as exc:
+                    update_step(db, "upload_youtube", "failed", str(exc))
+                    publish("upload_youtube", "failed", f"Upload failed: {exc}", 100)
+            else:
+                update_step(db, "upload_youtube", "skipped", "Auto-upload disabled")
+                publish("upload_youtube", "skipped", "Auto-upload disabled", 100)
 
             job.status = "done"
             job.finished_at = datetime.now(timezone.utc)
-            job.result = {"video_path": out_path, "video_id": str(video.id), "total_cost_usd": total_cost}
+            job.result = {
+                "video_path": out_path,
+                "video_id": video_id_str,
+                "total_cost_usd": total_cost,
+                "youtube_url": youtube_url,
+            }
             db.commit()
 
             r.publish(f"job:{job_id}", json.dumps({
                 "event": "job_done", "job_id": job_id,
-                "video_path": out_path, "video_id": str(video.id),
+                "video_path": out_path, "video_id": video_id_str,
                 "total_cost_usd": total_cost,
+                "youtube_url": youtube_url,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }))
 
-            return {"status": "done", "video_path": out_path, "total_cost_usd": total_cost}
+            return {"status": "done", "video_path": out_path, "total_cost_usd": total_cost, "youtube_url": youtube_url}
 
         except Exception as exc:
             job.status = "failed"

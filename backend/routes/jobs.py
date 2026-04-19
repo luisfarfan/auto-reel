@@ -29,6 +29,7 @@ async def create_youtube_job(req: GenerateVideoRequest, db: AsyncSession = Depen
             "model": req.model,
             "web_search_enabled": req.web_search_enabled,
             "duration_hint": req.duration_hint,
+            "auto_upload": req.auto_upload,
         },
     )
     db.add(job)
@@ -37,7 +38,7 @@ async def create_youtube_job(req: GenerateVideoRequest, db: AsyncSession = Depen
     task = generate_video.delay(
         str(job.id), str(req.account_id),
         req.niche, req.language,
-        req.topic, req.web_search_enabled, req.duration_hint,
+        req.topic, req.web_search_enabled, req.duration_hint, req.auto_upload,
     )
     job.celery_task_id = task.id
     await db.commit()

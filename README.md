@@ -304,16 +304,21 @@ docker-compose up
 - [x] Web search integration for YouTube Shorts pipeline (Tavily)
 - [x] Duration selector per job (30s / 60s / 90s / 120s)
 - [x] Topic override (skip LLM topic generation)
-- [x] Account connect flow — one-click Firefox session capture (YouTube + Twitter)
+- [x] Account connect flow — plain Firefox session capture (no WebDriver, Google won't block)
 - [x] Auto-upload YouTube Shorts via Selenium after generation
+- [x] Manual re-upload button for failed/skipped upload steps
 - [x] Real-time pipeline progress via WebSocket
 - [x] Cost tracking per service and per job
+- [x] Firefox dual-GPU fix for Ubuntu 24.04 (NVIDIA + AMD)
+
+### 🚧 Next Up
+
+- [ ] 🐦 **Twitter** — auto-post generated content (text + video) from the dashboard
+- [ ] 🎵 **TikTok** — connect account + auto-upload Shorts (same Selenium flow as YouTube)
 
 ### 📅 Planned
 
-- [ ] 🎵 Background music library (royalty-free tracks for Remotion templates)
-- [ ] 📤 Auto-upload Remotion videos to YouTube
-- [ ] 🐦 Twitter video posting (currently text only)
+- [ ] 📤 Auto-upload Remotion tech videos to YouTube
 - [ ] ⏰ CRON scheduling for automated posting
 - [ ] 🖼️ Video thumbnail previews in job list
 - [ ] 💸 Cost budget alerts and per-account limits

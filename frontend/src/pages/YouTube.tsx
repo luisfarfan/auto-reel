@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { api, type Account, type Job, type PipelineStep } from "@/lib/api"
 import { useJobStream } from "@/hooks/useJobStream"
 import { PipelineView } from "@/components/PipelineView"
@@ -91,16 +91,39 @@ function VideoPlayer({ job }: { job: Job }) {
 function JobRow({ job, onRefresh }: { job: Job; onRefresh: () => void }) {
   const [steps, setSteps] = useState<PipelineStep[]>([])
   const [expanded, setExpanded] = useState(false)
-  const { events } = useJobStream(job.status === "running" ? job.id : null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState("")
+  const { events } = useJobStream(job.status === "running" || uploading ? job.id : null)
+
+  async function handleUpload(e: React.MouseEvent) {
+    e.stopPropagation()
+    setUploading(true)
+    setUploadError("")
+    setExpanded(true)
+    try {
+      await api.jobs.uploadToYoutube(job.id)
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : String(err))
+      setUploading(false)
+      return
+    }
+    // Wait for job_done or job_failed event from stream
+  }
+
+  useEffect(() => {
+    const last = events[events.length - 1]
+    if (!last) return
+    if (last.event === "job_done" || last.event === "job_failed") {
+      if (uploading) setUploading(false)
+      api.jobs.steps(job.id).then(setSteps).catch(() => {})
+      onRefresh()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [events])
 
   useEffect(() => {
     if (expanded) api.jobs.steps(job.id).then(setSteps).catch(() => {})
   }, [job.id, expanded])
-
-  useEffect(() => {
-    const last = events[events.length - 1]
-    if (last?.event === "job_done" || last?.event === "job_failed") onRefresh()
-  }, [events, onRefresh])
 
   const progress = events.findLast((e) => e.progress != null)?.progress
 
@@ -132,6 +155,16 @@ function JobRow({ job, onRefresh }: { job: Job; onRefresh: () => void }) {
         {job.status === "running" && progress != null && (
           <span className="text-xs text-blue-400">{progress}%</span>
         )}
+        {(job.status === "done" || job.status === "failed") && job.result?.video_path && !job.result?.youtube_url && (
+          <button
+            onClick={handleUpload}
+            disabled={uploading}
+            className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white shrink-0"
+          >
+            {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+            {uploading ? "Uploading…" : "Upload to YouTube"}
+          </button>
+        )}
         <span className={cn("text-xs font-mono uppercase shrink-0", statusColor[job.status])}>
           {job.status}
         </span>
@@ -155,6 +188,13 @@ function JobRow({ job, onRefresh }: { job: Job; onRefresh: () => void }) {
         <div className="px-4 pb-3">
           <p className="text-xs text-red-400 font-mono bg-red-950/30 rounded px-2 py-1 truncate">
             {job.error}
+          </p>
+        </div>
+      )}
+      {uploadError && (
+        <div className="px-4 pb-3">
+          <p className="text-xs text-red-400 font-mono bg-red-950/30 rounded px-2 py-1 truncate">
+            Upload error: {uploadError}
           </p>
         </div>
       )}
@@ -193,7 +233,7 @@ export function YouTubePage() {
   const [accLanguage, setAccLanguage] = useState("English")
   const [accProfile, setAccProfile] = useState("")
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const [accs, js] = await Promise.all([
       api.accounts.list("youtube"),
       api.jobs.list({ type: "youtube_generate" }),
@@ -201,9 +241,10 @@ export function YouTubePage() {
     setAccounts(accs)
     setJobs(js)
     if (accs.length > 0 && !accountId) setAccountId(accs[0].id)
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [load])
 
   const createJob = async (e: React.FormEvent) => {
     e.preventDefault()

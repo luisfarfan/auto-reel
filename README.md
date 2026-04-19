@@ -75,7 +75,9 @@ Each step streams real-time progress to the dashboard via WebSocket.
 
 ## 📹 YouTube Shorts Pipeline
 
-Classic shorts pipeline — generate, compose, and optionally upload in one click:
+> ✅ **Fully working end-to-end** — tested on Ubuntu 24.04 with dual-GPU (NVIDIA + AMD). See [Troubleshooting](docs/Troubleshooting.md) if Firefox doesn't open.
+
+Generate, compose, and upload in one click:
 
 ```
 🔍 Web Search          →  Tavily API (optional — improves script accuracy)
@@ -87,7 +89,7 @@ Classic shorts pipeline — generate, compose, and optionally upload in one clic
 🔊 Synthesize Voice    →  edge-tts (7 languages, Microsoft Neural)
 📋 Generate Subtitles  →  faster-whisper base (word-level SRT)
 🎞️  Compose Video      →  MoviePy — images + TTS + background music + subtitles
-📤 Upload to YouTube   →  Selenium Firefox (skipped if auto-upload is off)
+📤 Upload to YouTube   →  Selenium Firefox — auto or manual re-upload from dashboard
 ```
 
 | Option | Values | Default |
@@ -98,15 +100,17 @@ Classic shorts pipeline — generate, compose, and optionally upload in one clic
 | Web search | on / off | off |
 | Auto-upload | on / off | off |
 
+If auto-upload is off (or the upload step fails), a **"Upload to YouTube"** button appears on the job card — click it to upload the already-rendered video without regenerating anything.
+
 ### Account Connect Flow
 
-No credentials stored. Session captured once from the browser:
+No credentials stored. Session captured once from a plain (non-automated) Firefox:
 
 1. Create an account in the dashboard (YouTube or Twitter)
-2. Click **Connect** → Firefox opens to the platform login page
-3. Log in normally in the browser window
-4. Dashboard detects the session cookie automatically and saves the Firefox profile
-5. All future jobs use that profile — fully automated
+2. Click **Connect** → plain Firefox opens to the platform login page
+3. Log in normally — Google/YouTube does **not** block this (no WebDriver involved)
+4. Dashboard reads the session cookie from the Firefox profile and saves the path
+5. All future jobs reuse that profile — fully automated
 
 Real-time status streams back via WebSocket: `opening → waiting → detected → connected`.
 
@@ -356,6 +360,17 @@ MoneyPrinterV2/
 ├── config.example.json
 └── .env.example
 ```
+
+---
+
+## 🛠️ Troubleshooting
+
+Common issues and fixes are documented in **[docs/Troubleshooting.md](docs/Troubleshooting.md)**.
+
+| Issue | Quick link |
+|---|---|
+| Firefox won't open / `Process unexpectedly closed with status 0` | [Firefox crash on Ubuntu 24.04 dual-GPU](docs/Troubleshooting.md#firefox-wont-open--process-unexpectedly-closed-with-status-0) |
+| Firefox profile path not found | [Profile path error](docs/Troubleshooting.md#firefox-profile-path-not-found) |
 
 ---
 

@@ -149,6 +149,7 @@ export const api = {
       duration_hint?: string
     }) => post<{ job_id: string; status: string }>("/jobs/remotion/generate", body),
     cancel: (id: string) => del<{ status: string }>(`/jobs/${id}`),
+    uploadToYoutube: (id: string) => post<{ job_id: string; status: string; task_id: string }>(`/jobs/${id}/upload`, {}),
   },
   videos: {
     list: () => get<VideoRecord[]>("/videos"),

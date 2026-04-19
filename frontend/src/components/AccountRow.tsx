@@ -34,7 +34,8 @@ export function AccountRow({
       return
     }
 
-    const ws = new WebSocket(`ws://localhost:8000/ws/accounts/${account.id}`)
+    const proto = window.location.protocol === "https:" ? "wss" : "ws"
+    const ws = new WebSocket(`${proto}://${window.location.host}/ws/accounts/${account.id}`)
     wsRef.current = ws
     ws.onmessage = (e) => {
       const data = JSON.parse(e.data)

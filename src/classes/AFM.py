@@ -59,8 +59,11 @@ class AffiliateMarketing:
         self.options.add_argument("-profile")
         self.options.add_argument(fp_profile_path)
 
-        # Set the service
-        self.service: Service = Service(GeckoDriverManager().install())
+        # Set the service — pass DISPLAY so Firefox opens on the correct X11 screen
+        _svc_env = os.environ.copy()
+        _svc_env.setdefault("DISPLAY", ":0")
+        _svc_env.setdefault("DRI_PRIME", "1")
+        self.service: Service = Service(GeckoDriverManager().install(), env=_svc_env)
 
         # Initialize the browser
         self.browser: webdriver.Firefox = webdriver.Firefox(

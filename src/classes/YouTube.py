@@ -22,6 +22,8 @@ from selenium import webdriver
 from moviepy.video.fx.all import crop
 from moviepy.config import change_settings
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.firefox.service import Service
 from selenium.webdriver.firefox.options import Options
 from moviepy.video.tools.subtitles import SubtitlesClip
@@ -91,8 +93,11 @@ class YouTube:
         self.options.add_argument("-profile")
         self.options.add_argument(self._fp_profile_path)
 
-        # Set the service
-        self.service: Service = Service(GeckoDriverManager().install())
+        # Set the service — pass DISPLAY so Firefox opens on the correct X11 screen
+        _svc_env = os.environ.copy()
+        _svc_env.setdefault("DISPLAY", ":0")
+        _svc_env.setdefault("DRI_PRIME", "1")
+        self.service: Service = Service(GeckoDriverManager().install(), env=_svc_env)
 
         # Initialize the browser
         self.browser: webdriver.Firefox = webdriver.Firefox(
@@ -784,7 +789,8 @@ class YouTube:
 
             title_el.click()
             time.sleep(1)
-            title_el.clear()
+            title_el.send_keys(Keys.CONTROL + "a")
+            title_el.send_keys(Keys.DELETE)
             title_el.send_keys(self.metadata["title"])
 
             if verbose:
@@ -794,7 +800,8 @@ class YouTube:
             time.sleep(10)
             description_el.click()
             time.sleep(0.5)
-            description_el.clear()
+            description_el.send_keys(Keys.CONTROL + "a")
+            description_el.send_keys(Keys.DELETE)
             description_el.send_keys(self.metadata["description"])
 
             time.sleep(0.5)

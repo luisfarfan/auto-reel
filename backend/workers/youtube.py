@@ -438,13 +438,17 @@ def generate_video(
                     from selenium.webdriver.firefox.options import Options
                     from selenium.webdriver.firefox.service import Service
                     from selenium.webdriver.common.by import By
+                    from selenium.webdriver.common.keys import Keys
                     from webdriver_manager.firefox import GeckoDriverManager
                     import time as _time
 
                     opts = Options()
                     opts.add_argument("-profile")
                     opts.add_argument(profile_path)
-                    service = Service(GeckoDriverManager().install())
+                    _svc_env = os.environ.copy()
+                    _svc_env.setdefault("DISPLAY", ":0")
+                    _svc_env.setdefault("DRI_PRIME", "1")
+                    service = Service(GeckoDriverManager().install(), env=_svc_env)
                     driver = webdriver.Firefox(service=service, options=opts)
 
                     try:
@@ -458,11 +462,13 @@ def generate_video(
 
                         textboxes = driver.find_elements(By.ID, "textbox")
                         textboxes[0].click(); _time.sleep(0.5)
-                        textboxes[0].clear()
+                        textboxes[0].send_keys(Keys.CONTROL + "a")
+                        textboxes[0].send_keys(Keys.DELETE)
                         textboxes[0].send_keys(title)
                         _time.sleep(10)
                         textboxes[-1].click(); _time.sleep(0.5)
-                        textboxes[-1].clear()
+                        textboxes[-1].send_keys(Keys.CONTROL + "a")
+                        textboxes[-1].send_keys(Keys.DELETE)
                         textboxes[-1].send_keys(description)
                         _time.sleep(0.5)
 
@@ -539,3 +545,146 @@ def generate_video(
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }))
             raise self.retry(exc=exc)
+
+
+@celery_app.task(bind=True, max_retries=1, default_retry_delay=10, name="youtube.upload_video_only")
+def upload_video_only(self, job_id: str) -> dict:
+    """Upload an already-rendered video to YouTube."""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from selenium import webdriver
+    from selenium.webdriver.firefox.options import Options
+    from selenium.webdriver.firefox.service import Service
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.common.keys import Keys
+    from webdriver_manager.firefox import GeckoDriverManager
+    import time as _time
+
+    sync_url = settings.database_url.replace("+asyncpg", "+psycopg2")
+    try:
+        engine = create_engine(sync_url)
+    except Exception:
+        engine = create_engine(settings.database_url.replace("+asyncpg", ""))
+    SessionLocal = sessionmaker(engine)
+
+    import redis as _redis
+    r = _redis.from_url(settings.redis_url, decode_responses=True)
+
+    def publish(status: str, detail: str = "", progress: int = 0):
+        r.publish(f"job:{job_id}", json.dumps({
+            "event": "step_update", "job_id": job_id,
+            "step": "upload_youtube", "status": status,
+            "detail": detail, "progress": progress,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }))
+
+    driver = None
+    with SessionLocal() as db:
+        try:
+            from backend.models.job import Job, PipelineStep
+            from backend.models.video import Video
+            from backend.models.account import Account
+
+            job = db.get(Job, job_id)
+            if not job or not job.result:
+                raise RuntimeError("Job or result not found")
+
+            video_path = job.result.get("video_path")
+            if not video_path or not os.path.exists(video_path):
+                raise RuntimeError(f"Video file not found: {video_path}")
+
+            account = db.get(Account, uuid.UUID(str(job.account_id)))
+            if not account or not account.firefox_profile_path:
+                raise RuntimeError("Account has no Firefox profile. Connect the account first.")
+
+            video_rec = db.query(Video).filter_by(job_id=job_id).first()
+            title = (video_rec.title if video_rec else None) or (job.result.get("title")) or "YouTube Short"
+            description = (video_rec.description if video_rec else None) or ""
+
+            publish("running", "Opening Firefox...", 10)
+
+            opts = Options()
+            opts.add_argument("-profile")
+            opts.add_argument(account.firefox_profile_path)
+            _svc_env = os.environ.copy()
+            _svc_env.setdefault("DISPLAY", ":0")
+            _svc_env.setdefault("DRI_PRIME", "1")
+            service = Service(GeckoDriverManager().install(), env=_svc_env)
+            driver = webdriver.Firefox(service=service, options=opts)
+
+            driver.get("https://www.youtube.com/upload")
+            _time.sleep(3)
+
+            publish("running", "Uploading file...", 30)
+            file_input = driver.find_element(By.TAG_NAME, "ytcp-uploads-file-picker").find_element(By.TAG_NAME, "input")
+            file_input.send_keys(video_path)
+            _time.sleep(8)
+
+            publish("running", "Setting title & description...", 60)
+            textboxes = driver.find_elements(By.ID, "textbox")
+            textboxes[0].click(); _time.sleep(0.5)
+            textboxes[0].send_keys(Keys.CONTROL + "a")
+            textboxes[0].send_keys(Keys.DELETE)
+            textboxes[0].send_keys(title)
+            _time.sleep(10)
+            textboxes[-1].click(); _time.sleep(0.5)
+            textboxes[-1].send_keys(Keys.CONTROL + "a")
+            textboxes[-1].send_keys(Keys.DELETE)
+            textboxes[-1].send_keys(description)
+            _time.sleep(0.5)
+
+            driver.find_element(By.NAME, "VIDEO_MADE_FOR_KIDS_NOT_MFK").click()
+            _time.sleep(0.5)
+
+            for _ in range(3):
+                driver.find_element(By.ID, "next-button").click()
+                _time.sleep(2)
+
+            radio_buttons = driver.find_elements(By.XPATH, '//*[@id="radioLabel"]')
+            radio_buttons[2].click()
+            _time.sleep(0.5)
+
+            driver.find_element(By.ID, "done-button").click()
+            _time.sleep(3)
+
+            driver.get("https://studio.youtube.com")
+            _time.sleep(2)
+            channel_id = driver.current_url.rstrip("/").split("/")[-1]
+            driver.get(f"https://studio.youtube.com/channel/{channel_id}/videos/short")
+            _time.sleep(3)
+            rows = driver.find_elements(By.TAG_NAME, "ytcp-video-row")
+            youtube_url = None
+            if rows:
+                href = rows[0].find_element(By.TAG_NAME, "a").get_attribute("href")
+                vid_id = href.split("/")[-2]
+                youtube_url = f"https://www.youtube.com/shorts/{vid_id}"
+
+            if video_rec:
+                video_rec.youtube_url = youtube_url
+            job.result = {**(job.result or {}), "youtube_url": youtube_url}
+            db.commit()
+
+            existing_step = db.query(PipelineStep).filter_by(job_id=job_id, step="upload_youtube").first()
+            if existing_step:
+                existing_step.status = "done"
+                existing_step.detail = youtube_url or "Uploaded"
+                existing_step.finished_at = datetime.now(timezone.utc)
+                db.commit()
+
+            publish("done", youtube_url or "Uploaded", 100)
+            r.publish(f"job:{job_id}", json.dumps({
+                "event": "job_done", "job_id": job_id,
+                "youtube_url": youtube_url,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }))
+            return {"status": "done", "youtube_url": youtube_url}
+
+        except Exception as exc:
+            publish("failed", str(exc), 100)
+            raise self.retry(exc=exc)
+        finally:
+            if driver:
+                try:
+                    driver.quit()
+                except Exception:
+                    pass

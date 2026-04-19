@@ -38,12 +38,29 @@ def _publish(r, account_id: str, status: str, message: str):
             json.dumps({"status": status, "message": message}))
 
 
+def _read_firefox_cookies(profile_dir: str) -> list[dict]:
+    """Read cookies from Firefox profile's cookies.sqlite without Selenium."""
+    import sqlite3
+    cookies_db = os.path.join(profile_dir, "cookies.sqlite")
+    if not os.path.exists(cookies_db):
+        return []
+    try:
+        # Copy DB first — Firefox holds a lock on it while running
+        import shutil, tempfile
+        tmp = tempfile.mktemp(suffix=".sqlite")
+        shutil.copy2(cookies_db, tmp)
+        con = sqlite3.connect(tmp)
+        rows = con.execute("SELECT name, value, host FROM moz_cookies").fetchall()
+        con.close()
+        os.unlink(tmp)
+        return [{"name": r[0], "value": r[1], "host": r[2]} for r in rows]
+    except Exception:
+        return []
+
+
 def _connect_flow(account_id: str, platform: str):
     import redis as _redis
-    from selenium import webdriver
-    from selenium.webdriver.firefox.options import Options
-    from selenium.webdriver.firefox.service import Service
-    from webdriver_manager.firefox import GeckoDriverManager
+    import subprocess as _sp
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
 
@@ -59,18 +76,38 @@ def _connect_flow(account_id: str, platform: str):
     profile_dir = os.path.join(os.getcwd(), ".mp", "profiles", account_id)
     os.makedirs(profile_dir, exist_ok=True)
 
-    driver = None
+    # Remove stale lock files from crashed previous sessions
+    for lock in ("lock", ".parentlock"):
+        lock_path = os.path.join(profile_dir, lock)
+        if os.path.lexists(lock_path):
+            os.remove(lock_path)
+
+    ff_proc = None
     try:
         _publish(r, account_id, "opening", "Opening Firefox...")
 
-        opts = Options()
-        opts.add_argument("-profile")
-        opts.add_argument(profile_dir)
-        service = Service(GeckoDriverManager().install())
-        driver = webdriver.Firefox(service=service, options=opts)
-        driver.get(PLATFORM_URLS.get(platform, "https://www.youtube.com"))
+        env = os.environ.copy()
+        env.setdefault("DISPLAY", ":0")
+        env.setdefault("DRI_PRIME", "1")
+        if not env.get("XAUTHORITY"):
+            xauth = f"/run/user/{os.getuid()}/gdm/Xauthority"
+            if os.path.exists(xauth):
+                env["XAUTHORITY"] = xauth
 
-        _publish(r, account_id, "waiting", f"Waiting for login... ({CONNECT_TIMEOUT}s remaining)")
+        # Kill stale Firefox so -new-instance isn't blocked
+        _sp.run(["pkill", "-x", "firefox"], capture_output=True)
+        time.sleep(1)
+
+        # Launch plain Firefox — NOT via Selenium so Google doesn't block login
+        target_url = PLATFORM_URLS.get(platform, "https://www.youtube.com")
+        ff_proc = _sp.Popen(
+            ["firefox", "--new-instance", "--no-remote", "--profile", profile_dir, target_url],
+            env=env,
+            stdout=_sp.DEVNULL,
+            stderr=_sp.DEVNULL,
+        )
+
+        _publish(r, account_id, "waiting", f"Log in to {platform} in the Firefox window that just opened. Waiting... ({CONNECT_TIMEOUT}s)")
 
         cookie_name = PLATFORM_COOKIES.get(platform, "LOGIN_INFO")
         deadline = time.time() + CONNECT_TIMEOUT
@@ -79,17 +116,25 @@ def _connect_flow(account_id: str, platform: str):
         while time.time() < deadline:
             remaining = int(deadline - time.time())
             _publish(r, account_id, "waiting", f"Waiting for login... ({remaining}s remaining)")
-            try:
-                cookies = driver.get_cookies()
+
+            # Read cookies directly from profile SQLite — no Selenium needed
+            cookies = _read_firefox_cookies(profile_dir)
+            if any(c["name"] == cookie_name for c in cookies):
+                detected = True
+                break
+
+            # Also stop if Firefox was closed by user
+            if ff_proc.poll() is not None:
+                # Give it one final cookie check after close
+                cookies = _read_firefox_cookies(profile_dir)
                 if any(c["name"] == cookie_name for c in cookies):
                     detected = True
-                    break
-            except Exception:
                 break
+
             time.sleep(POLL_INTERVAL)
 
         if not detected:
-            _publish(r, account_id, "timeout", "Timed out after 5 minutes. Please try again.")
+            _publish(r, account_id, "timeout", "Timed out or Firefox closed before login was detected. Please try again.")
             return
 
         _publish(r, account_id, "detected", "Session detected! Saving profile...")
@@ -107,9 +152,9 @@ def _connect_flow(account_id: str, platform: str):
     except Exception as exc:
         _publish(r, account_id, "failed", f"Error: {exc}")
     finally:
-        if driver:
+        if ff_proc and ff_proc.poll() is None:
             try:
-                driver.quit()
+                ff_proc.terminate()
             except Exception:
                 pass
 

@@ -130,6 +130,21 @@ async def get_job_steps(job_id: str, db: AsyncSession = Depends(get_db)):
     return result.scalars().all()
 
 
+@router.post("/{job_id}/upload", status_code=202)
+async def upload_job_video(job_id: str, db: AsyncSession = Depends(get_db)):
+    """Re-trigger the YouTube upload step for an existing completed job."""
+    from backend.workers.youtube import upload_video_only
+    job = await db.get(Job, _parse_uuid(job_id))
+    if not job:
+        raise HTTPException(404, "Job not found")
+    if job.type != "youtube_generate":
+        raise HTTPException(400, "Only youtube_generate jobs can be uploaded")
+    if not job.result or not job.result.get("video_path"):
+        raise HTTPException(400, "Job has no rendered video to upload")
+    task = upload_video_only.apply_async(args=[str(job.id)], queue="youtube")
+    return {"job_id": str(job.id), "status": "uploading", "task_id": task.id}
+
+
 @router.delete("/{job_id}")
 async def cancel_job(job_id: str, db: AsyncSession = Depends(get_db)):
     job = await db.get(Job, _parse_uuid(job_id))

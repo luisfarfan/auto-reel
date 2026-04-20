@@ -9,22 +9,33 @@
 | Componente | Estado |
 |---|---|
 | LLM (Ollama) | ✅ funciona |
-| TTS (KittenTTS) | ✅ funciona |
-| Subtítulos (Whisper local) | ✅ funciona |
+| TTS (edge-tts) | ✅ funciona |
+| Subtítulos (faster-whisper, word-level) | ✅ funciona |
 | Video compose (MoviePy) | ✅ funciona |
-| Image gen (Gemini/NanoBanana2) | ⚠️ requiere API key |
-| Upload YouTube (Selenium) | ⚠️ frágil, requiere Firefox logueado |
-| Post Twitter (Selenium) | ⚠️ frágil, requiere Firefox logueado |
+| Image gen (fal.ai FLUX) | ✅ funciona |
+| Upload YouTube (Selenium) | ✅ funciona |
+| Post Twitter (Selenium) | ✅ funciona (desde dashboard vía Celery) |
+| Web UI (React + FastAPI) | ✅ funciona — dashboard completo |
+| Base de datos (PostgreSQL) | ✅ funciona — SQLAlchemy async + Alembic |
+| Celery + Redis | ✅ funciona — jobs asíncronos con progress WebSocket |
+| Remotion tech video pipeline | ✅ funciona — 4 templates, 3 resoluciones |
 | Outreach (Google Maps scraper) | ❌ roto (scraper v0.9.7 desactualizado) |
-| Web UI | ❌ no existe |
-| Base de datos | ❌ JSON files sin locking |
-| Tests | ⚠️ solo cubre PostBridge |
+| TikTok upload | ❌ no implementado |
+| Claude API / OpenAI como LLM | ❌ solo Ollama |
+| Tests | ❌ no hay |
 
 ---
 
-## FASE 1 — Estabilizar el core (1-2 semanas)
+---
 
-### TASK-01: Integrar FAL.AI para generación de imágenes
+> **Nota (2026-04-19):** FASE 1 y FASE 2 están mayormente completas. Ver estado actual arriba.
+> Las fases 1-2 descritas abajo son referencia histórica. Lo que sigue está en FASE 3+.
+
+---
+
+## FASE 1 — Estabilizar el core ✅ COMPLETADA
+
+### TASK-01: Integrar FAL.AI para generación de imágenes ✅ HECHO
 
 **Problema:** NanoBanana2/Gemini es el único proveedor. Sin API key, no hay imágenes.
 **Solución:** Agregar FAL.AI como proveedor primario (mejor calidad, más modelos).
@@ -50,7 +61,7 @@
 
 ---
 
-### TASK-02: Descargar música de fondo automáticamente
+### TASK-02: Descargar música de fondo automáticamente ✅ HECHO
 
 **Problema:** El pipeline falla si no hay archivos en `Songs/`. `fetch_songs()` existe pero requiere `zip_url` en config.
 **Solución:** Agregar URL de música libre de derechos por defecto + fallback a silencio.
@@ -66,7 +77,7 @@
 
 ---
 
-### TASK-03: Reemplazar Selenium upload por YouTube Data API oficial
+### TASK-03: Reemplazar Selenium upload por YouTube Data API oficial ⏸️ POSTERGADO
 
 **Problema:** Selenium es frágil. YouTube cambia su UI → todo se rompe.
 **Solución:** Usar YouTube Data API v3 (OAuth2). Más estable, no requiere browser.
@@ -90,7 +101,7 @@
 
 ---
 
-### TASK-04: Arreglar Outreach (Google Maps scraper)
+### TASK-04: Arreglar Outreach (Google Maps scraper) ❌ PENDIENTE
 
 **Problema:** v0.9.7 roto, v1.12.0 cambió a web server.
 **Solución:** Actualizar `Outreach.py` para usar v1.12.0 (nueva API con web UI + CLI mode).
@@ -107,7 +118,7 @@
 
 ---
 
-### TASK-05: Agregar manejo de errores robusto
+### TASK-05: Agregar manejo de errores robusto ✅ HECHO (en Celery workers)
 
 **Problema:** Excepciones silenciosas. Browser no se cierra si falla.
 **Solución:** Wrappear pipelines en try/finally, agregar reintentos, logging estructurado.
@@ -125,9 +136,9 @@
 
 ---
 
-## FASE 2 — Web Dashboard (2-4 semanas)
+## FASE 2 — Web Dashboard ✅ COMPLETADA
 
-### TASK-06: Backend FastAPI
+### TASK-06: Backend FastAPI ✅ HECHO
 
 **Problema:** Solo existe CLI interactivo. No se puede usar remotamente ni escalar.
 **Solución:** API REST con FastAPI que exponga todos los flujos actuales.
@@ -161,7 +172,7 @@ src/
 
 ---
 
-### TASK-07: Jobs asíncronos con Celery + Redis
+### TASK-07: Jobs asíncronos con Celery + Redis ✅ HECHO
 
 **Problema:** Generar un video tarda 2-5 minutos. En una API sincrónica bloquea todo.
 **Solución:** Celery workers + Redis como broker.
@@ -183,7 +194,7 @@ GET /jobs/{job_id}     → retorna status: pending/running/done/failed + resulta
 
 ---
 
-### TASK-08: Frontend React
+### TASK-08: Frontend React ✅ HECHO
 
 **Problema:** No hay UI. Solo CLI.
 **Solución:** React SPA con dashboard de control.
@@ -210,7 +221,7 @@ GET /jobs/{job_id}     → retorna status: pending/running/done/failed + resulta
 
 ---
 
-### TASK-09: Autenticación OAuth en UI
+### TASK-09: Autenticación OAuth en UI ⚠️ PARCIAL (Firefox session capture implementado; OAuth API no)
 
 **Problema:** Login a YouTube/Twitter requiere Firefox con perfil. No funciona en servidor.
 **Solución:** Flujo OAuth en el dashboard web.
@@ -229,9 +240,9 @@ GET /jobs/{job_id}     → retorna status: pending/running/done/failed + resulta
 
 ---
 
-## FASE 3 — Base de datos y escalabilidad (3-6 semanas)
+## FASE 3 — Base de datos y escalabilidad ⚠️ PARCIALMENTE COMPLETADA
 
-### TASK-10: Migrar de JSON files a PostgreSQL
+### TASK-10: Migrar de JSON files a PostgreSQL ✅ HECHO
 
 **Problema:** JSON files sin locking atómico. No escala con múltiples workers/usuarios.
 **Solución:** PostgreSQL + SQLAlchemy ORM.
@@ -259,7 +270,7 @@ config (key, value, updated_at)
 
 ---
 
-### TASK-11: Sistema multi-usuario
+### TASK-11: Sistema multi-usuario ❌ PENDIENTE
 
 **Problema:** Todos los datos son globales. No hay concepto de "usuario".
 **Solución:** Agregar users table + JWT authentication.
@@ -275,7 +286,7 @@ config (key, value, updated_at)
 
 ---
 
-### TASK-12: Multi-cuenta con pool de browsers anti-detección
+### TASK-12: Multi-cuenta con pool de browsers anti-detección ❌ PENDIENTE
 
 **Problema:** Un Firefox, una cuenta. Fácil de detectar.
 **Solución:** Playwright + Camoufox + pool de cuentas rotando.
@@ -321,7 +332,7 @@ config (key, value, updated_at)
 
 ---
 
-### TASK-14: LLM mejorado con Claude API
+### TASK-14: LLM mejorado con Claude API ❌ PENDIENTE
 
 **Problema:** Ollama local es lento y limita la calidad del script.
 **Solución:** Agregar Claude API como proveedor LLM opcional.
@@ -425,35 +436,32 @@ docker-compose.yml    # app + postgres + redis + celery worker
 ## Orden de implementación recomendado
 
 ```
+✅ COMPLETADO (2026-04):
+  TASK-01 → FAL.AI images
+  TASK-02 → Música automática / fallback silencio
+  TASK-05 → Error handling (Celery workers)
+  TASK-06 → FastAPI backend
+  TASK-07 → Celery + Redis
+  TASK-08 → React frontend (dashboard completo)
+  TASK-10 → PostgreSQL + Alembic
+  Twitter post desde dashboard (Celery worker completo)
+
 AHORA:
-  TASK-01 → FAL.AI images          (30 min)
-  TASK-02 → Música automática      (20 min)
-  TASK-05 → Error handling         (1-2h)
+  TikTok → connect account + auto-upload Shorts  (mismo flow Selenium YouTube)
+  TASK-13 → Video quality (transiciones, Ken Burns, thumbnails)
 
-SEMANA 1-2:
-  TASK-03 → YouTube Data API       (2-3 días)
-  TASK-04 → Fix Outreach           (1 día)
+PRÓXIMO:
+  TASK-14 → Claude API / OpenAI como LLM provider  (1 día)
+  TASK-03 → YouTube Data API (reemplaza Selenium upload)  (2-3 días)
+  TASK-04 → Fix Outreach scraper v1.12.0  (1 día)
 
-SEMANA 3-4:
-  TASK-06 → FastAPI backend        (3-4 días)
-  TASK-07 → Celery + Redis         (1-2 días)
-  TASK-08 → React frontend         (1 semana)
-
-SEMANA 5-6:
-  TASK-09 → OAuth en UI            (2-3 días)
-  TASK-10 → PostgreSQL             (2-3 días)
-  TASK-14 → Claude API LLM        (1 día)
-
-SEMANA 7-8:
-  TASK-13 → Video quality          (2-3 días)
-  TASK-15 → TTS mejorado           (1-2 días)
-  TASK-17 → Docker                 (1 día)
-  TASK-18 → CI/CD                  (1 día)
-
-ONGOING:
-  TASK-12 → Anti-detección         (continuo)
-  TASK-16 → Analytics              (continuo)
-  TASK-19 → Observabilidad         (continuo)
+PLANIFICADO:
+  TASK-17 → Docker Compose completo  (1 día)
+  TASK-18 → CI/CD GitHub Actions  (1 día)
+  TASK-16 → Analytics (YouTube Analytics API)  (continuo)
+  TASK-12 → Anti-detección (Playwright + Camoufox)  (continuo)
+  TASK-11 → Multi-usuario + JWT  (si escala a SaaS)
+  TASK-19 → Observabilidad (structlog + Prometheus)  (continuo)
 ```
 
 ---

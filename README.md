@@ -310,11 +310,12 @@ docker-compose up
 - [x] Real-time pipeline progress via WebSocket
 - [x] Cost tracking per service and per job
 - [x] Firefox dual-GPU fix for Ubuntu 24.04 (NVIDIA + AMD)
+- [x] Twitter auto-post from dashboard — generate tweet (Ollama) + post via Selenium in one click
 
 ### 🚧 Next Up
 
-- [ ] 🐦 **Twitter** — auto-post generated content (text + video) from the dashboard
 - [ ] 🎵 **TikTok** — connect account + auto-upload Shorts (same Selenium flow as YouTube)
+- [ ] 📤 **Auto-upload Remotion tech videos** to YouTube from dashboard
 
 ### 📅 Planned
 

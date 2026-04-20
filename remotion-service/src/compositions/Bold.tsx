@@ -1,5 +1,5 @@
 import React from "react";
-import { AbsoluteFill, Sequence, Audio, useVideoConfig, useCurrentFrame, interpolate, spring, staticFile } from "remotion";
+import { AbsoluteFill, Sequence, Audio, useVideoConfig, useCurrentFrame, interpolate, staticFile } from "remotion";
 import { RenderProps } from "../types";
 import { ImageScene } from "../components/ImageScene";
 import { SubtitleWord } from "../components/SubtitleWord";
@@ -7,14 +7,21 @@ import { TitleCard } from "../components/TitleCard";
 
 const ACCENT_COLORS = ["#f43f5e", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#a855f7"];
 
-function FlashOverlay({ frame, fps }: { frame: number; fps: number }) {
-  // Brief white flash on scene cuts
-  const flash = interpolate(
-    frame % Math.round(fps * 3),
-    [0, 3, 8],
-    [0.25, 0, 0],
-    { extrapolateRight: "clamp" },
-  );
+// Deterministic color from script content — no random() in render
+function pickAccent(script: string): string {
+  const hash = script.split("").reduce((acc, c) => (acc * 31 + c.charCodeAt(0)) & 0xfffffff, 0);
+  return ACCENT_COLORS[hash % ACCENT_COLORS.length];
+}
+
+function FlashOverlay({ sceneBoundaries }: { sceneBoundaries: number[] }) {
+  const frame = useCurrentFrame();
+
+  const nearestBoundary = sceneBoundaries.find(b => frame >= b && frame < b + 10);
+  if (nearestBoundary === undefined) return null;
+
+  const localFrame = frame - nearestBoundary;
+  const flash = interpolate(localFrame, [0, 2, 10], [0.4, 0.15, 0], { extrapolateRight: "clamp" });
+
   return (
     <div style={{
       position: "absolute",
@@ -35,22 +42,24 @@ export const Bold: React.FC<RenderProps> = ({
   music_volume = 0.18,
 }) => {
   const { durationInFrames } = useVideoConfig();
-  const frame = useCurrentFrame();
   const imgs = images ?? [];
 
-  // Title card: first 2.5s
   const titleFrames = Math.round(fps * 2.5);
-  const accent = ACCENT_COLORS[Math.floor(Math.random() * ACCENT_COLORS.length)];
+  const accent = pickAccent(script);
 
-  // Image scenes after title card
   const remainingFrames = durationInFrames - titleFrames;
   const sceneDuration = imgs.length > 0
     ? Math.floor(remainingFrames / imgs.length)
     : remainingFrames;
 
+  // Flash at every real scene boundary
+  const sceneBoundaries = [
+    titleFrames,
+    ...imgs.map((_, i) => titleFrames + (i + 1) * sceneDuration).filter(f => f < durationInFrames),
+  ];
+
   return (
     <AbsoluteFill style={{ backgroundColor: "#000" }}>
-      {/* Image scenes */}
       {imgs.map((src, i) => {
         const from = titleFrames + i * sceneDuration;
         const duration = i === imgs.length - 1
@@ -63,11 +72,11 @@ export const Bold: React.FC<RenderProps> = ({
         );
       })}
 
-      {/* Dark overlay for contrast */}
+      {/* Dark overlay */}
       <div style={{
         position: "absolute",
         inset: 0,
-        background: "rgba(0,0,0,0.45)",
+        background: "rgba(0,0,0,0.40)",
         pointerEvents: "none",
       }} />
 
@@ -76,7 +85,7 @@ export const Bold: React.FC<RenderProps> = ({
         position: "absolute",
         bottom: 0, left: 0, right: 0,
         height: 400,
-        background: "linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%)",
+        background: "linear-gradient(to top, rgba(0,0,0,0.82) 0%, transparent 100%)",
         pointerEvents: "none",
       }} />
 
@@ -97,10 +106,9 @@ export const Bold: React.FC<RenderProps> = ({
         />
       </Sequence>
 
-      {/* Flash on scene cuts */}
-      <FlashOverlay frame={frame} fps={fps} />
+      {/* Flash on actual scene cuts */}
+      <FlashOverlay sceneBoundaries={sceneBoundaries} />
 
-      {/* Bold subtitles */}
       {subtitles.length > 0 && (
         <SubtitleWord
           subtitles={subtitles}
@@ -111,7 +119,6 @@ export const Bold: React.FC<RenderProps> = ({
         />
       )}
 
-      {/* TTS voice */}
       {audio_path && <Audio src={audio_path} />}
 
       {music_track && (

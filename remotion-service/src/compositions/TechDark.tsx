@@ -5,6 +5,22 @@ import { GradientBackground } from "../components/GradientBackground";
 import { SubtitleWord } from "../components/SubtitleWord";
 import { CodeBlock } from "../components/CodeBlock";
 import { ImageScene } from "../components/ImageScene";
+import { CodeSnippet } from "../types";
+
+type Scene =
+  | { type: "code"; data: CodeSnippet }
+  | { type: "image"; data: string };
+
+// Interleave code snippets and images: [code, image, code, image, ...]
+function buildScenes(snippets: CodeSnippet[], imgs: string[]): Scene[] {
+  const scenes: Scene[] = [];
+  const maxLen = Math.max(snippets.length, imgs.length);
+  for (let i = 0; i < maxLen; i++) {
+    if (i < snippets.length) scenes.push({ type: "code", data: snippets[i] });
+    if (i < imgs.length) scenes.push({ type: "image", data: imgs[i] });
+  }
+  return scenes;
+}
 
 export const TechDark: React.FC<RenderProps> = ({
   script,
@@ -20,8 +36,7 @@ export const TechDark: React.FC<RenderProps> = ({
 
   const snippets = code_snippets ?? [];
   const imgs = images ?? [];
-  const scenes = [...snippets.map((s) => ({ type: "code" as const, data: s })),
-                  ...imgs.map((src) => ({ type: "image" as const, data: src }))];
+  const scenes = buildScenes(snippets, imgs);
 
   const sceneFrames = scenes.length > 0
     ? Math.floor(durationInFrames / scenes.length)
@@ -31,11 +46,10 @@ export const TechDark: React.FC<RenderProps> = ({
     <AbsoluteFill>
       <GradientBackground colors={["#0d1117", "#161b22"]} animate />
 
-      {/* Scenes */}
       {scenes.map((scene, i) => {
         const from = i * sceneFrames;
         const duration = i === scenes.length - 1
-          ? durationInFrames - from   // last scene takes remainder
+          ? durationInFrames - from
           : sceneFrames;
 
         return (
@@ -49,7 +63,6 @@ export const TechDark: React.FC<RenderProps> = ({
         );
       })}
 
-      {/* Subtitles always on top */}
       {subtitles.length > 0 && (
         <SubtitleWord
           subtitles={subtitles}
@@ -60,10 +73,8 @@ export const TechDark: React.FC<RenderProps> = ({
         />
       )}
 
-      {/* TTS voice */}
       {audio_path && <Audio src={audio_path} />}
 
-      {/* Background music */}
       {music_track && (
         <Audio
           src={staticFile(`music/${music_track}`)}

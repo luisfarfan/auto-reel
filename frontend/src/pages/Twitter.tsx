@@ -1,10 +1,18 @@
 import { useEffect, useState } from "react"
 import { api, type Account, type Job } from "@/lib/api"
+import { useJobStream } from "@/hooks/useJobStream"
 import { AccountRow } from "@/components/AccountRow"
 import { cn } from "@/lib/utils"
-import { AtSign, Plus, Loader2 } from "lucide-react"
+import { AtSign, Plus, Loader2, AlertTriangle } from "lucide-react"
 
-function JobRow({ job }: { job: Job }) {
+function JobRow({ job, onRefresh }: { job: Job; onRefresh: () => void }) {
+  const isLive = job.status === "pending" || job.status === "running"
+  const { lastEvent, isDone, isFailed } = useJobStream(isLive ? job.id : null)
+
+  useEffect(() => {
+    if (isDone || isFailed) onRefresh()
+  }, [isDone, isFailed])
+
   const statusColor: Record<Job["status"], string> = {
     pending: "text-yellow-400",
     running: "text-blue-400",
@@ -14,6 +22,7 @@ function JobRow({ job }: { job: Job }) {
   }
 
   const content = job.result?.content as string | undefined
+  const liveDetail = lastEvent?.event === "step_update" ? lastEvent.detail : null
 
   return (
     <div className="rounded-lg border border-border bg-card px-4 py-3 space-y-1.5">
@@ -25,6 +34,14 @@ function JobRow({ job }: { job: Job }) {
           {job.status}
         </span>
       </div>
+
+      {isLive && liveDetail && (
+        <p className="text-xs text-blue-400 font-mono bg-blue-950/30 rounded px-2 py-1 flex items-center gap-1.5">
+          <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+          {liveDetail}
+        </p>
+      )}
+
       {content && (
         <p className="text-xs text-muted-foreground bg-secondary rounded px-2 py-1.5 leading-relaxed">
           {content}
@@ -55,7 +72,6 @@ export function TwitterPage() {
   // account form
   const [accNickname, setAccNickname] = useState("")
   const [accTopic, setAccTopic] = useState("")
-  const [accProfile, setAccProfile] = useState("")
 
   const load = async () => {
     const [accs, js] = await Promise.all([
@@ -68,6 +84,8 @@ export function TwitterPage() {
   }
 
   useEffect(() => { load() }, [])
+
+  const selectedAccount = accounts.find((a) => a.id === accountId)
 
   const createJob = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -97,9 +115,9 @@ export function TwitterPage() {
         platform: "twitter",
         nickname: accNickname.trim(),
         topic: accTopic.trim() || undefined,
-        firefox_profile_path: accProfile.trim() || undefined,
       })
-      setAccNickname(""); setAccTopic(""); setAccProfile("")
+      setAccNickname("")
+      setAccTopic("")
       setShowNewAccount(false)
       load()
     } catch (err) {
@@ -147,11 +165,20 @@ export function TwitterPage() {
                 className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm"
               >
                 {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>{a.nickname}</option>
+                  <option key={a.id} value={a.id}>{a.nickname}{a.connected ? "" : " (not connected)"}</option>
                 ))}
               </select>
             )}
           </div>
+
+          {selectedAccount && !selectedAccount.connected && (
+            <div className="flex items-center gap-2 rounded-lg bg-yellow-950/30 border border-yellow-800/40 px-3 py-2">
+              <AlertTriangle className="w-3.5 h-3.5 text-yellow-400 shrink-0" />
+              <p className="text-xs text-yellow-400">
+                Account not connected — click <strong>Connect</strong> on the account card first.
+              </p>
+            </div>
+          )}
 
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground">Topic</label>
@@ -168,8 +195,9 @@ export function TwitterPage() {
           <div className="flex gap-2">
             <button
               type="submit"
-              disabled={submitting || accounts.length === 0}
-              className="flex items-center gap-1.5 text-sm bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-50"
+              disabled={submitting || accounts.length === 0 || !selectedAccount?.connected}
+              title={!selectedAccount?.connected ? "Connect the account first" : undefined}
+              className="flex items-center gap-1.5 text-sm bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {submitting && <Loader2 className="w-3 h-3 animate-spin" />}
               Post tweet
@@ -215,16 +243,10 @@ export function TwitterPage() {
                   className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm placeholder:text-muted-foreground"
                 />
               </div>
-              <div className="col-span-2 space-y-1">
-                <label className="text-xs text-muted-foreground">Firefox profile path</label>
-                <input
-                  value={accProfile}
-                  onChange={(e) => setAccProfile(e.target.value)}
-                  placeholder="/home/user/.mozilla/..."
-                  className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm placeholder:text-muted-foreground"
-                />
-              </div>
             </div>
+            <p className="text-xs text-muted-foreground">
+              After saving, click <strong>Connect</strong> on the account card to link your Twitter session via Firefox.
+            </p>
             <div className="flex gap-2">
               <button type="submit" disabled={submitting} className="text-sm bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-50">
                 {submitting && <Loader2 className="w-3 h-3 animate-spin inline mr-1" />}Save
@@ -258,7 +280,7 @@ export function TwitterPage() {
         {jobs.length === 0 ? (
           <p className="text-sm text-muted-foreground">No jobs yet.</p>
         ) : (
-          jobs.map((j) => <JobRow key={j.id} job={j} />)
+          jobs.map((j) => <JobRow key={j.id} job={j} onRefresh={load} />)
         )}
       </section>
     </div>

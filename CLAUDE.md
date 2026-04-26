@@ -1,83 +1,87 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+> Claude Code guide for MoneyPrinterV2.
+> This file = critical rules + orientation. Full docs in [docs/index.md](docs/index.md).
 
-## Project Overview
+---
 
-MoneyPrinterV2 (MPV2) is a Python 3.12 CLI tool that automates four online workflows:
-1. **YouTube Shorts** — generate video (LLM script → TTS → images → MoviePy composite) and upload via Selenium
-2. **Twitter/X Bot** — generate and post tweets via Selenium
-3. **Affiliate Marketing** — scrape Amazon product info, generate pitch, share on Twitter
-4. **Local Business Outreach** — scrape Google Maps (Go binary), extract emails, send cold outreach via SMTP
+## What This Is
 
-There is no web UI, no REST API, no test suite, no CI, and no linting config.
+Local-first AI content automation platform. 4 layers:
 
-## Running the Application
-
-```bash
-# First-time setup
-cp config.example.json config.json   # then fill in values
-python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-
-# macOS quick setup (auto-configures Ollama, ImageMagick, Firefox profile)
-bash scripts/setup_local.sh
-
-# Preflight check (validates services are reachable)
-python scripts/preflight_local.py
-
-# Run
-python src/main.py
-```
-
-The app **must** be run from the project root. `python src/main.py` adds `src/` to `sys.path`, so all imports use bare module names (e.g., `from config import *`, not `from src.config import *`).
-
-## Architecture
-
-### Entry Points
-- `src/main.py` — interactive menu loop (primary)
-- `src/cron.py` — headless runner invoked by the scheduler as a subprocess: `python src/cron.py <platform> <account_uuid>`
-
-### Provider Pattern
-Two service categories use a string-based dispatch pattern configured in `config.json`:
-
-| Category | Config key | Options |
+| Layer | Location | Language |
 |---|---|---|
-| LLM | `ollama_model` | Ollama (via `ollama` Python SDK). If empty, user picks from available models at startup. |
-| Image gen | — | `nanobanana2` (Gemini image API) |
-| STT | `stt_provider` | `local_whisper`, `third_party_assemblyai` |
+| Backend API + Workers | `backend/` | Python 3.12 / FastAPI + Celery |
+| Video renderer | `remotion-service/` | Node.js / TypeScript / Remotion 4 |
+| Dashboard | `frontend/` | React 18 / TypeScript / Tailwind |
+| Legacy CLI (do not refactor) | `src/` | Python 3.12 |
 
-LLM always uses the local Ollama server. Image generation always uses Nano Banana 2.
+Each directory has its own `CLAUDE.md` loaded automatically when working in it.
 
-### Key Modules
-- **`src/llm_provider.py`** — unified `generate_text(prompt)` function using the Ollama Python SDK
-- **`src/config.py`** — 30+ getter functions, each re-reads `config.json` on every call (no caching). `ROOT_DIR` = project root, computed as `os.path.dirname(sys.path[0])`
-- **`src/cache.py`** — JSON file persistence in `.mp/` directory (accounts, videos, posts, products)
-- **`src/constants.py`** — menu strings, Selenium selectors (YouTube Studio, X.com, Amazon)
-- **`src/classes/YouTube.py`** — most complex class; full pipeline: topic → script → metadata → image prompts → images → TTS → subtitles → MoviePy combine → Selenium upload
-- **`src/classes/Twitter.py`** — Selenium automation against x.com
-- **`src/classes/AFM.py`** — Amazon scraping + LLM pitch generation
-- **`src/classes/Outreach.py`** — Google Maps scraper (requires Go) + email sending via yagmail
-- **`src/classes/Tts.py`** — KittenTTS wrapper
+---
 
-### Data Storage
-All persistent state lives in `.mp/` at the project root as JSON files (`youtube.json`, `twitter.json`, `afm.json`). This directory also serves as scratch space for temporary WAV, PNG, SRT, and MP4 files — non-JSON files are cleaned on each run by `rem_temp_files()`.
+## Start Here
 
-### Browser Automation
-Selenium uses pre-authenticated Firefox profiles (never handles login). The profile path is stored per-account in the cache JSON and also in `config.json` as a default.
+| Need | Go To |
+|---|---|
+| Run any layer | [docs/guides/running.md](docs/guides/running.md) |
+| First-time setup | [docs/guides/setup.md](docs/guides/setup.md) |
+| DB schema | [docs/architecture/database.md](docs/architecture/database.md) |
+| WebSocket events | [docs/architecture/websocket.md](docs/architecture/websocket.md) |
+| Celery task pattern | [docs/architecture/celery.md](docs/architecture/celery.md) |
+| Why src/ is weird | [docs/architecture/legacy-cli.md](docs/architecture/legacy-cli.md) |
+| Stack overview | [docs/architecture/overview.md](docs/architecture/overview.md) |
+| All docs | [docs/index.md](docs/index.md) |
 
-### CRON Scheduling
-Uses Python's `schedule` library (in-process, not OS cron). The scheduled job spawns `subprocess.run(["python", "src/cron.py", platform, account_id])`.
+---
 
-## Configuration
+## Non-Negotiable Rules
 
-All config lives in `config.json` at the project root. See `config.example.json` for the full template and `docs/Configuration.md` for reference. Key external dependencies to configure:
-- **ImageMagick** — required for MoviePy subtitle rendering (`imagemagick_path`)
-- **Firefox profile** — must be pre-logged-in to target platforms (`firefox_profile`)
-- **Ollama** — for LLM text generation (via `ollama` Python SDK)
-- **Nano Banana 2** — for image generation (Gemini image API)
-- **Go** — only needed for Outreach (Google Maps scraper)
+### 1. src/ import path — breaks silently if wrong
+
+`src/` uses `sys.path` injection. All files inside `src/` import bare names:
+```python
+from config import get_ollama_model     # correct
+from src.config import get_ollama_model # WRONG — ImportError at runtime
+```
+Workers must call `sys.path.insert(0, "src")` before any `src/` import.
+
+### 2. Do not refactor src/
+
+Celery workers import `from classes.YouTube import YouTube` and `from llm_provider import generate_text` directly. Any rename/move silently breaks jobs. New features go in `backend/`.
+
+### 3. LLM = Ollama only
+
+Never add OpenAI or Anthropic as LLM providers. Use `src/llm_provider.py` → `generate_text(prompt)`.
+
+### 4. No passwords in DB
+
+Auth = Firefox profile (cookie sessions). `accounts.connected = true` means valid session exists. No credentials stored anywhere.
+
+### 5. Celery tasks are sync, FastAPI routes are async
+
+Celery uses psycopg2 (sync). FastAPI uses asyncpg (async). Never mix drivers.
+
+### 6. Remotion bundle requires restart
+
+After editing `remotion-service/src/compositions/` or `components/`, restart the service. Bundle builds once at startup.
+
+---
+
+## Services & Ports
+
+| Service | Port |
+|---|---|
+| FastAPI | 8000 |
+| React frontend | 5173 |
+| Remotion | 3001 |
+| PostgreSQL | 5432 |
+| Redis | 6379 |
+| Ollama | 11434 |
+
+---
 
 ## Contributing
 
-PRs go against `main`. One feature/fix per PR. Open an issue first. Use `WIP` label for in-progress PRs.
+PRs against `main`. One feature/fix per PR. Open issue first.
+Commit style: `feat(scope): description` or `fix(scope): description`.

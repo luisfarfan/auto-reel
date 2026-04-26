@@ -1,7 +1,7 @@
 # MoneyPrinterV2 — Architecture & Technical Specification
 
-> Fuente de verdad para Claude Code, Cursor, y cualquier desarrollador.
-> Leer completo antes de tocar cualquier archivo.
+> Deep technical spec: DB schema, WebSocket events, Celery config, Remotion API.
+> AI editor quick-start: [CLAUDE.md](CLAUDE.md) | [.cursorrules](.cursorrules) | [docs/index.md](docs/index.md)
 
 ---
 

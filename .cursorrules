@@ -1,0 +1,108 @@
+# MoneyPrinterV2 — Cursor Rules
+
+Full docs: [docs/index.md](docs/index.md) | Deep spec: [ARCHITECTURE.md](ARCHITECTURE.md)
+
+## What This Is
+
+Local-first AI content automation. 4 layers:
+- `backend/` — FastAPI + Celery (Python 3.12)
+- `remotion-service/` — Node.js / TypeScript / Remotion 4
+- `frontend/` — React 18 / TypeScript / Tailwind
+- `src/` — Legacy CLI (Celery workers import from here — do not refactor)
+
+## Hard Rules
+
+| Rule | Why |
+|---|---|
+| `src/` uses bare imports (`from config import x`) | `sys.path` hack — `from src.config` breaks at runtime |
+| Never refactor `src/` | Workers import `YouTube`, `Twitter`, `generate_text` directly |
+| LLM = Ollama only | By design — local, free, private |
+| No passwords in DB | Auth = Firefox profile cookie sessions |
+| Celery tasks = sync (psycopg2) | FastAPI routes = async (asyncpg) — don't mix |
+| Restart remotion-service after composition edits | Bundle built once at startup |
+
+## Dev Commands
+
+```bash
+# Backend (port 8000)
+uvicorn backend.main:app --reload --port 8000
+
+# Workers
+celery -A backend.workers.celery_app worker -Q remotion,youtube,twitter -c 1
+
+# Remotion (port 3001)
+cd remotion-service && npm run dev
+
+# Frontend (port 5173)
+cd frontend && npm run dev
+
+# Migrations
+alembic upgrade head
+
+# Validate
+python scripts/preflight_local.py
+```
+
+## Key Files
+
+| File | Role |
+|---|---|
+| `backend/main.py` | FastAPI app — CORS, WebSocket, router registration |
+| `backend/database.py` | Async SQLAlchemy engine + `get_db()` dependency |
+| `backend/settings.py` | Pydantic Settings from `.env` |
+| `backend/workers/celery_app.py` | Celery + `task_routes` |
+| `backend/workers/youtube.py` | `youtube.generate_video` task |
+| `backend/workers/twitter.py` | `twitter.post_tweet` task |
+| `backend/workers/remotion_generate.py` | `remotion.generate_video` task |
+| `remotion-service/src/server.ts` | Express: `POST /render` |
+| `remotion-service/src/renderer.ts` | Bundle cache + `renderMedia()` |
+| `remotion-service/src/types.ts` | Zod `RenderProps` schema |
+| `frontend/src/hooks/useJobStream.ts` | WebSocket — job pipeline progress |
+| `frontend/src/hooks/useAccountStream.ts` | WebSocket — account connect status |
+| `frontend/src/lib/api.ts` | Typed fetch client |
+| `src/llm_provider.py` | `generate_text(prompt)` — Ollama |
+| `src/config.py` | config.json reader (re-reads every call) |
+| `src/classes/YouTube.py` | `upload_video()` — called by youtube worker |
+| `src/classes/Twitter.py` | `post()` — called by twitter worker |
+
+## Celery Step Pattern
+
+Every step in a pipeline task must:
+```python
+publish(step, "running", detail, pct, job_id)      # Redis Pub/Sub
+update_step(db, step_obj, "running")               # DB
+result = do_work()
+update_step(db, step_obj, "done", str(result), meta)
+publish(step, "done", str(result), pct + delta, job_id)
+# After external API call:
+insert_cost_record(db, service="fal.ai", cost_usd=0.003, job_id=job_id)
+```
+
+## Environment Variables (.env)
+
+```env
+DATABASE_URL=postgresql+asyncpg://mpv2:mpv2@localhost:5432/mpv2
+REDIS_URL=redis://localhost:6379/0
+FAL_KEY=your_key
+TAVILY_API_KEY=optional
+OLLAMA_BASE_URL=http://localhost:11434
+REMOTION_SERVICE_URL=http://localhost:3001
+MP_DIR=.mp
+CONFIG_PATH=config.json
+```
+
+## Python Style
+
+- Type hints on all functions
+- `async/await` in FastAPI routes + DB; sync in Celery tasks
+- SQLAlchemy 2.0: `select(Model)` not `session.query()`
+- Pydantic v2: `model_validator` not v1 `@validator`
+- `snake_case` / `PascalCase` / `UPPER_SNAKE_CASE`
+- Comments only for non-obvious WHY
+
+## TypeScript Style
+
+- Functional React components only
+- Custom hooks for WebSocket + async logic
+- `cn()` for conditional Tailwind classes
+- Zod for runtime validation
